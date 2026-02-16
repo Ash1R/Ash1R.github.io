@@ -344,8 +344,17 @@ footer {
 
 /* === Responsive === */
 @media (max-width: 900px) {
+  .content-row {
+    flex-direction: column;
+  }
+
   .side-imgs {
-    display: none;
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .side-img {
+    width: 100%;
   }
 }
 
