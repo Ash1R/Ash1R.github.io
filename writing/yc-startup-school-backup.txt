@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YC AI Startup School — Day 1 | Ashir Rao</title>
+  <meta name="description" content="Ashir Rao's account of Day 1 at YC AI Startup School — Garry Tan, Sam Altman, Francois Chollet, Fei-Fei Li, and more.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x2726;</text></svg>">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+
+<div class="page">
+  <a href="../index.html#writing" class="back-link">&larr; Back to Writing</a>
+
+  <article>
+    <header class="post-header">
+      <h1>YC AI Startup School &mdash; Day 1</h1>
+      <p class="post-date">June 21, 2025</p>
+    </header>
+
+    <div class="post-content">
+      <p>One of YCombinator's several principles and ethoses is to "hack the system" in a creative way. All 3000 of us there had to write an essay about it to be invited. I was reminded of it that morning. Because we arrived exactly on time, we waited in the longest line with everyone else.</p>
+
+      <p>It was something of a wait once we were all seated. On the main screen flashed what is probably YC's most important principle &mdash; "make something people want." Just so we didn't forget, they made it the WiFi password too.</p>
+
+      <p>By now, the low buzz of people filtering in had risen to a cacophony. And then, out of nowhere, the announcer announced Garry Tan, CEO of YCombinator. He came up to the stage with great energy. What he said made me realize that the tone of this event was about to be something I hadn't seen in a very, very long time.</p>
+
+      <p>Optimism.</p>
+
+      <p>He extolled the virtues of the great city of San Francisco, told us of his own rags to riches story from an apartment in Fremont, and gave us something of a chuckle when he said we were the 3000 brightest young people on Earth.</p>
+
+      <p>Hyperbole aside, it was a refreshing change from the techno-doomerism I've seen for the past 2 years. To continue, Garry then called perhaps the man most bullish on AI in the world to the stage &mdash; Sam Altman.</p>
+
+      <p>Immediately the crowd stood up and went wild. Altman had the confidence of a celebrity. When he started speaking, it became clear that he had even more confidence in the coming of AGI. Generative AI was just the beginning. Now, we had reasoning models. Soon, we'll have robots. These robots will automate the supply chain. And then, who knows?</p>
+
+      <p>What he said would become a theme in this event &mdash; now is the best time to build a startup. There is immense asymmetry between what people can do with AI, and what people have done with AI (the next day, Altman made a blog post claiming to have achieved singularity). Perhaps the accelerationism is correct. Maybe the end times of conventional capitalism are nigh, and the time to build wealth through AI, the new means of production now and forever, is in this short window of time.</p>
+
+      <p>Then came Jared Kaplan, Co-Founder of Anthropic. Not to be outdone, he gave the striking advice to build things that are literally impossible for AI to do, simply on the faith that his company will figure out how to make a model to do it, while we just have to sit back and be the first people with the idea.</p>
+
+      <p>After that, it was time for a break. And therefore, networking. I met a lot of people from Cornell, my university. It helped that I had ordered some merch the week before. Frankly, I had no idea my school had this many founders, and I found it funny that I was meeting them all in San Francisco instead of Ithaca.</p>
+
+      <p>When the break ended, I went to see Fran&ccedil;ois Chollet. Author of <em>Deep Learning with Python</em>, the Frenchman was a really good choice of speaker after the AI hyper-optimists before him. Chollet created ARC-AGI, an IQ test/AI benchmark that no model has been able to pass. Yet, every human he surveyed was able to! Chollet argued that AGI is not here, and that a new approach would be needed to achieve it.</p>
+
+      <p>His idea would be familiar to many of my PL professors at Cornell &mdash; discrete program search. An LLM tries to construct programs to solve problems, instead of solving 2 &times; 8 using text prediction with massive data, it actually abstracts the notion of multiplication into 2 &times; y or even x &times; y, allowing it to solve any multiplication problem.</p>
+
+      <p>Of course, just a few examples, like 2 &times; 5 = 10; 2 &times; 3 = 6; 2 &times; 7 = 14; can actually be very hard to abstract for a machine. What if your function is just 2 &times; 5 = 10; 2 &times; 3 = 6; and 2 &times; {anything else} is 14? To you, a human, that's absurd. It is not absurd to a machine. And that's why Chollet says that we don't have AGI. (This really needs its own analysis.)</p>
+
+      <p>Next came John Jumper, of Google DeepMind. He had an interesting talk about how AlphaFold, his team's invention, was able to fold proteins that researchers take months or years to figure out. Jumper loves his work and loves his team even more &mdash; his takeaway was that your team is more important than your compute power or the amount of data you have &mdash; they are the ultimate multiplying factor.</p>
+
+      <p>Fei-Fei Li was my favorite speaker that day. The Godmother of AI loves her children, and it's clear that she's excited for whatever comes next. It was great to find a scientific grounding in what was actually happening in deep learning, from ImageNet to AlexNet and beyond. I found it interesting when she said that science had already achieved the goals she wanted to meet before she died.</p>
+
+      <p>Finally came the one everyone was waiting for, Elon Musk. He phoned in through Zoom, but his interview was probably still the one everyone paid the most attention to. He called his time in government a sidequest. Now it was time to return to his main quest, technology, specifically ASI and humanoid robot armies. In the future, we may even have 10 super intelligences running the whole world&hellip;</p>
+
+      <p>And that was the end of day 1 of YC AI startup school. Thank you to sync.ai for hosting an amazing afterparty!</p>
+    </div>
+  </article>
+</div>
+
+<footer>
+  &copy; 2026 Ashir Rao
+</footer>
+
+</body>
+</html>
