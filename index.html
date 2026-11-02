@@ -5,180 +5,236 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ashir Rao</title>
-  <meta name="description" content="Ashir Rao — CS @ Cornell. Software engineering, robotics, ML, and media.">
+  <meta name="description" content="Ashir Rao, CS at Cornell. Previously Google Cloud SQL, now Amazon Redshift.">
   <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x2726;</text></svg>">
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%2315181B'/><text x='50' y='70' font-size='62' text-anchor='middle' fill='%23E4E6E2' font-family='Georgia,serif'>a</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400..500&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
+  <main class="page">
 
-  <div class="page">
-    <!-- Header: always visible -->
-    <header class="header">
-      <div class="header-top">
-        <h1>Ashir Rao</h1>
-        <p class="subtitle">CS @ Cornell </p>
+    <figure class="photo">
+      <img src="im-1.png" width="824" height="616" alt="Cornell campus at night in fog.">
+    </figure>
+
+    <h1>Hi, I&rsquo;m Ashir.</h1>
+
+    <p>
+      I study computer science at <strong>Cornell</strong>. Right now I&rsquo;m a software engineering
+      intern at <strong>Amazon</strong> on Redshift. Before that, I worked on Cloud SQL infrastructure at
+      <strong>Google</strong>, LLM code optimization at the <strong>Zhang Research Group</strong>,
+      computer vision at <strong>CUAir</strong>, and AI code evaluation at <strong>PolyAPI</strong>.
+      In January I&rsquo;m joining <strong>Cohere</strong> to work on model serving.
+    </p>
+
+    <p>
+      I&rsquo;m interested in ML systems, evals, and making AI agents reliable.
+    </p>
+
+    <p>
+      Say hi at <a href="mailto:ar2558@cornell.edu">ar2558@cornell.edu</a>
+    </p>
+
+    <p class="links">
+      <a href="https://github.com/Ash1R" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://www.linkedin.com/in/ashir-rao-82a66a225/" target="_blank" rel="noopener">LinkedIn</a>
+    </p>
+
+    <section aria-labelledby="exp-h">
+      <h2 id="exp-h">Experience</h2>
+      <ul class="rows">
+        <li>
+          <div class="row">
+            <span class="row-thumb row-thumb-empty"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Cohere</span><span class="row-date">Jan 2027</span></span>
+              <span class="row-desc">Incoming. Infrastructure for on-prem model serving on Kubernetes</span>
+            </span>
+          </div>
+        </li>
+        <li>
+          <button class="row" data-demo="amazon">
+            <span class="row-thumb"><img src="assets/thumbs/amazon.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Amazon</span><span class="row-date">2026</span></span>
+              <span class="row-desc">C++ path for reclaiming deleted Redshift rows on burst clusters</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="google">
+            <span class="row-thumb"><img src="assets/thumbs/google.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Google</span><span class="row-date">2026</span></span>
+              <span class="row-desc">Java/gRPC config validation for Cloud SQL across 40+ regions. Cut machine-tier
+                launches from 2 weeks to 5 hours</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="zhang">
+            <span class="row-thumb"><img src="assets/thumbs/zhang.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Zhang Research Group</span><span
+                  class="row-date">2026</span></span>
+              <span class="row-desc">Verified LLM-generated C optimizations for FastGA. 78% less memory on
+                human-genome alignment</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="polyapi">
+            <span class="row-thumb"><img src="assets/thumbs/polyapi.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">PolyAPI</span><span class="row-date">2025</span></span>
+              <span class="row-desc">Failure detection across 300+ APIs. Eval harness for AI-generated code</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="cuair">
+            <span class="row-thumb"><img src="assets/thumbs/cuair.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">CUAir</span><span class="row-date">2024</span></span>
+              <span class="row-desc">Aerial target detection at 97% accuracy. 10 FPS inference on a Raspberry Pi</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="bln">
+            <span class="row-thumb"><img src="assets/thumbs/bln.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Big Local News</span><span class="row-date">2022</span></span>
+              <span class="row-desc">WARN layoff data from 12+ states, used by Google News and the NYT</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="proj-h">
+      <h2 id="proj-h">Projects</h2>
+      <ul class="rows">
+        <li>
+          <button class="row" data-demo="speedboat">
+            <span class="row-thumb"><img src="assets/thumbs/speedboat.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Speedboat</span></span>
+              <span class="row-desc">Gemini coding-agent harness that catches loops, malformed tool calls, and false
+                completions</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="slopgym">
+            <span class="row-thumb"><img src="assets/thumbs/slopgym.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">SlopGym</span></span>
+              <span class="row-desc">Benchmark and blind-voting arena for rewriting AI-sounding text without losing
+                facts</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="secondopinion">
+            <span class="row-thumb"><img src="assets/thumbs/secondopinion.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Second Opinion</span></span>
+              <span class="row-desc">Checks whether a model changes its answer when you tell it what you think</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="trolllang">
+            <span class="row-thumb"><img src="assets/thumbs/trolllang.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Trolllang</span></span>
+              <span class="row-desc">Small ML language in C++, compiled to native code through LLVM</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="patchtst">
+            <span class="row-thumb"><img src="assets/thumbs/patchtst.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">PatchTST</span></span>
+              <span class="row-desc">PyTorch reproduction of the paper. Matched or beat it on 3 of 4 benchmarks</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="perspectives">
+            <span class="row-thumb"><img src="assets/thumbs/perspectives.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Perspectives</span></span>
+              <span class="row-desc">News site with 10,000+ users. Classified political bias with 90% accuracy to
+                build balanced feeds</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="vae">
+            <span class="row-thumb"><img src="assets/thumbs/vae.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">VAE Explorer</span></span>
+              <span class="row-desc">Interactive latent-space demo for Cornell&rsquo;s deep learning course</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button class="row" data-demo="critter">
+            <span class="row-thumb"><img src="assets/thumbs/critter.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Critter World</span></span>
+              <span class="row-desc">Compiler frontend and multithreaded evolution simulation. TA for the course</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <div class="row">
+            <span class="row-thumb row-thumb-empty"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Gems From Jaipur</span></span>
+              <span class="row-desc">Inventory system for a jewelry company. Replaced paper records that cost $4,000 a
+                year in errors</span>
+            </span>
+          </div>
+        </li>
+        <li>
+          <button class="row" data-demo="scouting">
+            <span class="row-thumb"><img src="assets/thumbs/scouting.jpg" alt="" loading="lazy"></span>
+            <span class="row-main">
+              <span class="row-top"><span class="row-name">Scouting apps</span></span>
+              <span class="row-desc">Data collection for robotics competitions</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+    </section>
+
+  </main>
+
+  <dialog id="demo" class="demo" aria-labelledby="demo-title">
+    <div class="demo-head">
+      <div>
+        <h2 id="demo-title"></h2>
+        <p class="demo-sub"></p>
       </div>
-      <nav class="nav">
-        <a href="#about" class="nav-link active" data-section="about">About</a>
-        <a href="#projects" class="nav-link" data-section="projects">Projects</a>
-        <a href="#writing" class="nav-link" data-section="writing">Writing</a>
-        <a href="#contact" class="nav-link" data-section="contact">Contact</a>
-        <span class="nav-spacer"></span>
-        <a href="https://github.com/Ash1R" target="_blank" class="nav-ext">GitHub</a>
-        <a href="https://www.linkedin.com/in/ashir-rao-82a66a225/" target="_blank" class="nav-ext">LinkedIn</a>
-      </nav>
-    </header>
-
-    <!-- Content + optional side image -->
-    <div class="content-row">
-    <main class="content">
-      <section id="about" class="panel active">
-        <p>I study computer science and spend most of my time somewhere between software engineering, machine
-          learning, and media. .</p>
-      </section>
-
-      <section id="projects" class="panel">
-        <ul class="project-list">
-
-          <li class="project-item">
-            <div class="project-header">
-              <h3><a href="https://cuair.org/index.html" target="_blank">CU Air</a></h3>
-              <span class="project-tag">ML &middot; Rust &middot; LiDAR</span>
-            </div>
-            <p class="project-desc">Cornell project team for autonomous planes. I work on VLMs for navigation and Rust
-              on a Raspberry Pi with LiDAR.</p>
-          </li>
-
-          <li class="project-item">
-            <div class="project-header">
-              <h3>Gems From Jaipur</h3>
-              <span class="project-tag">Computer Vision</span>
-            </div>
-            <p class="project-desc">Inventory tracking for a jewelry company. Set up a Raspberry Pi with a camera to
-              auto-tag pieces as they moved through the workshop.</p>
-          </li>
-
-          <li class="project-item">
-            <div class="project-header">
-              <h3><a href="https://perfectmatch.ai/statistics" target="_blank">Perfect Match</a></h3>
-              <span class="project-tag">Web &middot; Algorithms</span>
-            </div>
-            <p class="project-desc">Cornell's matchmaking app. I'm on the web dev team, working on the site and a
-              personality-based matching algorithm.</p>
-          </li>
-
-          <li class="project-item">
-            <div class="project-header">
-              <h3>Perspectives</h3>
-              <span class="project-tag">NLP</span>
-            </div>
-            <p class="project-desc">Used NLP to detect bias in news articles. Had about 100,000 site views while it was
-              up.</p>
-          </li>
-
-          <li class="project-item">
-            <div class="project-header">
-              <h3>AboutYou</h3>
-              <span class="project-tag">AI &middot; Full Stack</span>
-            </div>
-            <p class="project-desc">An AI agent to help with interview prep and college essay writing. Built with React,
-              Firebase, Nest.js, and OpenAI.</p>
-          </li>
-
-          <li class="project-item">
-            <div class="project-header">
-              <h3>Scouting Apps</h3>
-              <span class="project-tag">Mobile Web</span>
-            </div>
-            <p class="project-desc">Web app for collecting data on other robotics teams at competitions. Around 20 teams
-              used it each year.</p>
-            <div class="project-links">
-              <a href="https://scoutingapp-2024.web.app/matchscout" target="_blank">'24</a>
-              <a href="https://scoutingapp-e4a98.web.app/matchscout" target="_blank">'23</a>
-            </div>
-          </li>
-
-          <li class="project-item">
-            <div class="project-header">
-              <h3><a href="https://acsu.cornell.edu/" target="_blank">Cornell ACSU</a></h3>
-              <span class="project-tag">TypeScript</span>
-            </div>
-            <p class="project-desc">Resource site for Cornell CIS undergrads. I'm leading the transition to TypeScript
-              and built an events calendar.</p>
-          </li>
-
-          <li class="project-item">
-            <div class="project-header">
-              <h3>CritterWorld</h3>
-              <span class="project-tag">Systems &middot; GUI</span>
-            </div>
-            <p class="project-desc">CS 2112's final project. 18,000 lines of code &mdash; a language parser, a simulated
-              world of critters, and a concurrent GUI running thousands of steps per second.</p>
-          </li>
-
-        </ul>
-      </section>
-
-      <section id="writing" class="panel">
-        <p class="writing-empty">Nothing here yet. Check back soon.</p>
-      </section>
-
-      <section id="contact" class="panel">
-        <p>Say hi</p>
-        <div class="contact-links">
-          <a href="mailto:ar2558@cornell.edu">ar2558@cornell.edu</a>
-          <a href="https://github.com/Ash1R" target="_blank">GitHub</a>
-          <a href="https://www.linkedin.com/in/ashir-rao-82a66a225/" target="_blank">LinkedIn</a>
-        </div>
-      </section>
-    </main>
-    <div class="side-imgs">
-      <img src="im-1.png" alt="" class="side-img visible" data-for="about">
-      <img src="im-2.png" alt="" class="side-img" data-for="projects">
-      <img src="im-3.png" alt="" class="side-img" data-for="writing">
-      <img src="im-4.png" alt="" class="side-img" data-for="contact">
+      <button class="demo-close" aria-label="Close">&times;</button>
     </div>
-    </div>
-  </div>
+    <div class="demo-stage"></div>
+    <p class="demo-sim">Simulation</p>
+    <p class="demo-desc"></p>
+    <p class="demo-links"></p>
+  </dialog>
 
-  <footer>
-    &copy; 2026 Ashir Rao
-  </footer>
-
-  <script>
-    const navLinks = document.querySelectorAll('.nav-link');
-    const panels = document.querySelectorAll('.panel');
-    const sideImgs = document.querySelectorAll('.side-img');
-
-    function showSection(id) {
-      panels.forEach(p => {
-        p.classList.toggle('active', p.id === id);
-      });
-      navLinks.forEach(link => {
-        link.classList.toggle('active', link.dataset.section === id);
-      });
-      sideImgs.forEach(img => {
-        img.classList.toggle('visible', img.dataset.for === id);
-      });
-    }
-
-    navLinks.forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        showSection(link.dataset.section);
-        history.replaceState(null, '', '#' + link.dataset.section);
-      });
-    });
-
-    // Handle direct URL with hash
-    const hash = window.location.hash.replace('#', '');
-    if (hash && document.getElementById(hash)) {
-      showSection(hash);
-    }
-  </script>
-
+  <script src="demos.js"></script>
 </body>
 
 </html>

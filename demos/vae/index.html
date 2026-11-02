@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VAE Latent Space Explorer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <div>
+        <h1>VAE Latent Space Explorer</h1>
+        <p>Encode an input, run an interpolation test, or drag latent space. The decoder updates from the current latent vector.</p>
+      </div>
+      <p class="keyboard-hint"><kbd>←</kbd> <kbd>→</kbd> test points &nbsp; <kbd>Space</kbd> play &nbsp; <kbd>K</kbd> KL</p>
+    </header>
+
+    <section class="demo-flow" aria-label="Interactive VAE latent space demo">
+      <section class="panel explore-panel">
+        <div class="demo-head">
+          <div>
+            <p class="panel-label">Interactive demo</p>
+            <h2>Move through latent space and watch the decoder</h2>
+            <p class="section-note">Highlight an input to show its encoded region. The dots are other encoded training samples, not extra buttons. Interpolation tests whether the decoder works between examples.</p>
+          </div>
+          <span id="regionBadge" class="region-badge">smooth region</span>
+        </div>
+
+        <div class="experiment-controls">
+          <div id="inputChoiceList" class="input-choice-list" aria-label="Input examples"></div>
+
+          <div class="segmented-control compact-control" role="group" aria-label="Choose latent view dimension">
+            <button id="view2dButton" class="mode-button active" type="button" aria-pressed="true">2D</button>
+            <button id="view3dButton" class="mode-button" type="button" aria-pressed="false">3D</button>
+          </div>
+
+          <div class="segmented-control" role="group" aria-label="Choose latent space mode">
+            <button id="withKlButton" class="mode-button active" type="button" aria-pressed="true">With KL</button>
+            <button id="withoutKlButton" class="mode-button" type="button" aria-pressed="false">No KL</button>
+          </div>
+
+          <div class="path-controls" aria-label="Interpolation test">
+            <button id="prevButton" class="icon-button" type="button" aria-label="Previous interpolation point">←</button>
+            <button id="playButton" class="play-button" type="button">Play interpolation</button>
+            <button id="nextButton" class="icon-button" type="button" aria-label="Next interpolation point">→</button>
+          </div>
+        </div>
+
+        <p id="stepNote" class="try-hint">Interpolation is the test: move between known examples. With KL, the middle should still decode; without KL, the middle can become an unused gap.</p>
+
+        <div class="equation-strip" aria-label="VAE equations">
+          <span><strong>Prior</strong> <span class="math">p(z) = N(0, I)</span></span>
+          <span><strong>Encoder</strong> <span class="math">q(z|x) = N(&mu;, &sigma;<sup>2</sup>)</span></span>
+          <span><strong>Sample</strong> <span class="math">z = &mu; + &sigma; &odot; &epsilon;</span></span>
+          <span><strong>KL</strong> <span class="math">KL(q(z|x) || p(z))</span></span>
+        </div>
+
+        <div class="explore-layout">
+          <div class="latent-panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="panel-label">Latent view</p>
+                <h3 id="latentViewTitle">z1 by z2</h3>
+                <p id="latentViewHint" class="interaction-hint">Drag anywhere on the map. The decoder preview changes as <span class="math">z</span> moves.</p>
+              </div>
+            </div>
+            <div class="canvas-wrap">
+              <canvas id="latentCanvas" width="560" height="560" aria-label="2D latent space map"></canvas>
+              <canvas id="latentCanvas3d" width="560" height="560" aria-hidden="true"></canvas>
+              <div class="axis-label x-axis">z1</div>
+              <div class="axis-label y-axis">z2</div>
+              <div class="axis-label z-axis">z3</div>
+            </div>
+            <div class="map-note" aria-label="Legend">
+              <span><span class="legend-dot"></span>encoded training samples not shown as buttons</span>
+              <span><span class="legend-posterior"></span><span class="math">q(z|x)</span></span>
+              <span><span class="legend-cursor"></span>current z</span>
+              <span><span class="legend-path"></span>interpolation route</span>
+            </div>
+            <div class="path-strip" aria-label="Decoded samples along the interpolation route">
+              <div>
+                <p class="panel-label">Interpolation test</p>
+                <p id="observationText" class="observation-text">These fixed points show whether the space between examples decodes smoothly or breaks.</p>
+              </div>
+              <div id="sampleStrip" class="sample-strip"></div>
+            </div>
+          </div>
+
+          <aside class="preview-panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="panel-label">Decoder</p>
+                <h3>output from z</h3>
+              </div>
+            </div>
+
+            <div class="example-flow" aria-label="Selected input image and decoded output">
+              <div class="sample-block">
+                <canvas id="previewCanvas" width="260" height="260" aria-label="Decoded sample preview"></canvas>
+                <div id="previewImageStack" class="preview-image-stack" aria-hidden="true"></div>
+              </div>
+              <p id="decodeStatus" class="decode-status">Sampled <span class="math">z</span>: the decoder receives one draw from <span class="math">q(z|x)</span>.</p>
+              <div class="input-strip">
+                <canvas id="inputCanvas" width="180" height="180" aria-label="Selected input image"></canvas>
+                <div>
+                  <p class="sample-label">encoded input</p>
+                  <p id="selectedInputValue">encoded to current z</p>
+                </div>
+              </div>
+            </div>
+
+            <dl class="stats">
+              <div>
+                <dt>Current z <span class="stat-info" data-tip="The latent point currently being sent into the decoder. Dragging the map changes this." aria-label="The latent point currently being sent into the decoder. Dragging the map changes this.">i</span></dt>
+                <dd id="zValue">(0.00, 0.00)</dd>
+              </div>
+              <div>
+                <dt>Encoder center <span class="stat-info" data-tip="The center of the selected input's encoded distribution. Highlighting a different input moves this." aria-label="The center of the selected input's encoded distribution. Highlighting a different input moves this.">i</span></dt>
+                <dd id="muValue">(0.00, 0.00)</dd>
+              </div>
+              <div>
+                <dt>Uncertainty <span class="stat-info" data-tip="How spread out the selected input's encoded distribution is. Larger values mean a wider oval." aria-label="How spread out the selected input's encoded distribution is. Larger values mean a wider oval.">i</span></dt>
+                <dd id="sigmaValue">(0.00, 0.00)</dd>
+              </div>
+              <div>
+                <dt>Mode <span class="stat-info" data-tip="With KL pulls encodings toward a normal prior. No KL lets them become isolated islands." aria-label="With KL pulls encodings toward a normal prior. No KL lets them become isolated islands.">i</span></dt>
+                <dd id="modeValue">With KL</dd>
+              </div>
+              <div>
+                <dt>Region <span class="stat-info" data-tip="What kind of latent area the current point is in: smooth, island, transition, or gap." aria-label="What kind of latent area the current point is in: smooth, island, transition, or gap.">i</span></dt>
+                <dd id="regionValue">smooth</dd>
+              </div>
+            </dl>
+
+            <p id="pinnedText" class="pinned-text">Click the map to pin a latent vector.</p>
+          </aside>
+        </div>
+      </section>
+    </section>
+
+    <footer class="takeaway-bar">
+      <p id="takeawayText">With KL: the model learns posterior distributions near a normal prior, making prior samples more likely to decode cleanly.</p>
+    </footer>
+  </main>
+
+  <script src="vendor/three-global.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
