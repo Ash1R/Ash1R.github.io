@@ -192,7 +192,9 @@ async function pump() {
     if (!asr || !intent) { addLog(false, "Speaker is here but models are still loading", "", cues); continue; }
     setVerdict("#f2c200", "Speaker is here… transcribing");
     const t0 = performance.now(), text = (await asr(to16k(u))).text.trim(), { score } = await intent(text);
-    const ms = Math.round(performance.now() - t0), yes = score > 0;
+    // a score that shows as -0.00 still counts for longer sentences, short junk transcripts like "you" sit there too
+    const words = text.split(/\s+/).filter(w => /\w/.test(w)).length;
+    const ms = Math.round(performance.now() - t0), yes = score > 0 || (score >= -0.005 && words > 4);
     addLog(yes, yes ? "Would respond" : "Ignored, not a request", text, `${cues} · request ${sgn(score)} · ${ms} ms`);
     setVerdict(yes ? "#0a7a2f" : "#bbb", yes ? `Would respond to “${text}”` : `Ignored, “${text}” isn't a request`);
   }
