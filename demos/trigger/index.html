@@ -72,7 +72,7 @@ You need to have the volume up and the silent switch off. Click on how it works 
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
 
 const NEAR = 27.5, SYNC = 0.095, F0 = 19000;  // sync shows as +0.10 or more
-const BOTH_NEAR = 25;  // with the echo also required, a little less level is enough
+const BOTH_NEAR = 20;  // background noise eats into this margin, so with the echo also required it is lower
 const TONE_MIN = -45, TONE_MAX = -15;  // the echo works from about -41 to -13 dB, it breaks near -5
 let toneGain, gainNow = 0.3, lastStep = 0;  // output gain of the tone, eased down when the mic hears it louder than TONE_MAX
 const tone = new Float32Array(1024);  // tone level per hop, indexed by hop number mod 1024
@@ -183,7 +183,7 @@ async function pump() {
       continue;
     }
     if (!here) {
-      const why = mode === "loudness" || syncOk ? "too far away"
+      const why = mode === "loudness" || syncOk ? "voice not loud enough over the background"
         : u.tone < TONE_MIN ? "the 19 kHz tone is too quiet to hear an echo" : "voice doesn't match the echo";
       addLog(false, `Ignored, ${why}`, "", cues);
       setVerdict("#bbb", `Ignored, ${why}`);
