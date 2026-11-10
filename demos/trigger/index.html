@@ -71,7 +71,7 @@ You need to have the volume up and the silent switch off. Click on how it works 
 <script type="module">
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
 
-const NEAR = 27.5, SYNC = 0.095, F0 = 19000;  // sync shows as +0.10 or more
+const NEAR = 27.5, SYNC = 0.085, F0 = 19000;  // sync shows as +0.09 or more
 const BOTH_NEAR = 20;  // background noise eats into this margin, so with the echo also required it is lower
 const TONE_MIN = -45, TONE_MAX = -15;  // the echo works from about -41 to -13 dB, it breaks near -5
 let toneGain, gainNow = 0.3, lastStep = 0;  // output gain of the tone, eased down when the mic hears it louder than TONE_MAX
