@@ -19,10 +19,10 @@
 </style>
 </head>
 <body>
-<h2>Talk to your phone without "Hey Google"</h2>
-<p class="note">It responds to requests spoken to the phone and ignores videos, people across the room and noise.
-Hold the phone about 40 cm away and ask <i>what's the capital of Japan</i>, then play a talking video near it or talk from across the room.
-Turn the volume up and the silent switch off. Everything runs on the phone and no audio leaves it.</p>
+<h2>Talk to your phone! </h2>
+<p class="note">It responds to requests spoken to the phone and ignores videos, people across the room and noise (hopefully).
+Hold the phone about 40 cm away and ask <i>what's the capital of Japan</i> (or whatever you want), then try with the phone face down, or playing a talking video near it, or talk from across the room.
+You need to have the volume up and the silent switch off. Click on how it works to find out how its all running completely locally!</p>
 
 <button id="start">Start</button> <span id="load" class="note"></span>
 <p class="note">Detect the speaker with
@@ -40,30 +40,27 @@ Turn the volume up and the silent switch off. Everything runs on the phone and n
 
 <details>
 <summary>How it works</summary>
-<p class="note">Each sound passes through a cascade, and each stage runs only if the one before it passed.</p>
+<p class="note">Each sound passes through SEVERAL METHODS, and it has to pass all of them</p>
 <ol class="note">
-  <li><b>Speech.</b> Loudness and pitch periodicity every 10 ms.</li>
+  <li><b>Speech.</b> Loudness and pitch, periodicity every 10 ms.</li>
   <li><b>Phone face up.</b> Face down means leave me alone, like Pixel's Flip to Shhh.</li>
-  <li><b>Speaker right here.</b> The phone plays an inaudible 19 kHz tone, and lip and jaw motion Doppler-shift its echo, shown as the orange trace. Two small causal conv nets, one for audio and one for the echo spectrogram, learned whether a voice and an echo come from the same moment. They were trained self-supervised with a contrastive loss on 10 minutes of unlabeled phone audio. Loudness above the room's noise floor is the second cue.</li>
-  <li><b>What was said.</b> Whisper-tiny.</li>
+  <li><b>Speaker being closeby.</b> The phone plays an inaudible 19 kHz tone, and your lip and jaw motion should Doppler-shift the echo, shown as the orange line. Two small conv nets, one for audio and one for the echo spectrogram, learned whether a voice and an echo come from the same moment. They were self-supervised trained with a contrastive loss on 10 minutes of unlabeled phone audio (aka me, Ashir, reading Kafka's Metamorphosis with Danza Kaduro playing in the background). A spike in loudness above the room's noise floor can also pass this, you can pick in the dropdown above whether you need both or just one of these to pass</li>
+  <li><b>Transcribing was said.</b> Whisper-tiny.</li>
   <li><b>Is it a request.</b> Nearest examples in MiniLM sentence-embedding space.</li>
 </ol>
-<p class="note"><b>Numbers</b></p>
+<p class="note"><b>Parameters</b></p>
 <ul class="note">
-  <li>Sync model has 29k parameters and takes about 50 ms per utterance in plain JS</li>
-  <li>Front end takes 0.2 ms per 10 ms of audio, about 2% of one core</li>
-  <li>Whisper-tiny has 39M parameters in int8 and takes about 1.4 s per utterance on a laptop</li>
+  <li>My trained Syncing model has 29k parameters and takes about 50 ms per utterance in plain JS</li>
+  <li>Whisper-tiny has 39M parameters in int8 and takes about 1.4 s per utterance on a laptop, idk for phone</li>
   <li>MiniLM has 23M parameters in int8</li>
-  <li>On my recordings Whisper ran on 20 of 74 utterances</li>
+  <li>On my recordings Whisper ran on 20 of 74 utterances, idk what the inference budget is for this problem</li>
 </ul>
 <p class="note"><b>Optimizations</b></p>
 <ul class="note">
-  <li>The cascade keeps the large models off for most sounds</li>
-  <li>Streaming front end with constant work per 10 ms hop</li>
-  <li>Exact 48-sample demodulation table and a DFT over only the 19 Doppler bins instead of a full FFT</li>
+  <li>The goal is to not use the larger models for everything</li>
   <li>Pitch and mel features computed at 8 kHz</li>
-  <li>The sync model is trained on the exact features the phone computes, so the JS and PyTorch outputs match to 5e-8</li>
-  <li>Whisper and MiniLM quantized to int8</li>
+  <li>The sync model is trained on the exact features the phone computes (24 mel bands of voice and 18 bin Doppler image for the echo), so the JS and PyTorch outputs match to 5e-8</li>
+  <li>Whisper and MiniLM quantized to int8, maybe we can get away with more</li>
 </ul>
 <p class="note"><a href="record.html">Recorder page</a> for collecting labeled scenes.</p>
 </details>
