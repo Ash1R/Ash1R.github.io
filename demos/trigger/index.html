@@ -50,7 +50,7 @@ const SCENES = [  // [name, addressed to assistant?, instruction] — names matc
   ["silent_working", 0, "Sit with the phone in front of you and work silently on your laptop."],
 ];
 const $ = id => document.getElementById(id);
-let ctx, fs, track, chunks = [], captured = 0, capturing = false, ring, head = 0, filled = 0, segs = [], mode;
+let ctx, fs, track, chunks = [], captured = 0, capturing = false, ring, head = 0, filled = 0, still = null, segs = [], mode;
 
 const worklet = `registerProcessor("rec", class extends AudioWorkletProcessor {
   process(inputs) { const x = inputs[0][0]; if (x) this.port.postMessage(x.slice(0)); return true; }
@@ -115,8 +115,19 @@ function selfCheck() {
   const snr = 10 * Math.log10(c / (n + 1e-20)), lvl = 10 * Math.log10(c / (recent.length ** 2 / 16) + 1e-20);
   const s = track.getSettings(), proc = ["echoCancellation", "noiseSuppression", "autoGainControl"].filter(k => s[k]);
   const ok = snr > 25 && fs >= 44100 && !proc.length;
+  let side = 0, nb = 0;  // Doppler sidebands 15-80 Hz either side of the carrier = motion in front of the phone
+  for (let d = 15; d <= 80; d += 5) { side += power(recent, F0 + d) + power(recent, F0 - d); nb += 2; }
+  const motion = 10 * Math.log10(Math.max(side - nb * n, 1e-3 * nb * n) / c);  // minus broadband (typing, clicks) floor
+  let meter = "— (no 19 kHz carrier)";
+  if (snr > 25) {
+    still = still === null ? motion : Math.min(still + 0.3, motion);  // slowly-rising floor = "nothing moving"
+    const bar = Math.max(0, Math.min(30, Math.round(motion - still)));
+    meter = `<span style="font-family:monospace">${"█".repeat(bar)}${"·".repeat(30 - bar)}</span> +${(motion - still).toFixed(0)} dB`;
+  }
   $("check").innerHTML = `<b class="${ok ? "ok" : "bad"}">${ok ? "Ultrasound OK" : "Ultrasound problem"}</b><br>
-    19 kHz echo ${snr.toFixed(0)} dB above nearby noise (want &gt; 25), level ${lvl.toFixed(0)} dBFS, ${fs} Hz` +
+    19 kHz echo ${snr.toFixed(0)} dB above nearby noise (want &gt; 25), level ${lvl.toFixed(0)} dBFS, ${fs} Hz<br>
+    motion ${meter}
+    <br><small>Hold still, then wave a hand 10–20 cm above the bottom edge: the bar should jump 10+ dB. Covering the bottom edge should drop the level.</small>` +
     (proc.length ? `<br><span class="bad">Browser is still applying: ${proc.join(", ")}</span>` : "") +
     (snr <= 25 ? `<br><small>Raise the volume, uncover the bottom speaker/mic; if it stays low this phone/browser filters ultrasound.</small>` : "");
 }
