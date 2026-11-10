@@ -169,7 +169,7 @@ class Detector {
     const n = Math.round((b - a) * this.fsA / 100), A = this.audio.length, end = this.na - (this.t - b) * Math.round(this.fsA / 100);
     const audio = new Float32Array(Math.min(n, A));
     for (let i = 0; i < audio.length; i++) audio[i] = this.audio[((end - audio.length + i) % A + A) % A];
-    return { start: a, end: b, near, echo, audio, fs: this.fsA,
+    return { start: a, end: b, near, voice: near + floor, echo, audio, fs: this.fsA,  // voice: absolute level in dB re full scale
              mel: this.range("mel", a - PAD, b), dop: this.range("dop", a - PAD, b), pad: PAD };  // with 1 s of lead-in context
   }
 }

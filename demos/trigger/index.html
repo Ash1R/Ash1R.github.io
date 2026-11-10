@@ -34,7 +34,7 @@ You need to have the volume up and the silent switch off. Click on how it works 
 
 <div id="light"><div id="dot"></div><div id="verdict">Not started</div></div>
 <canvas id="cv"></canvas>
-<div class="meta"><span style="color:#1a5fd0">■</span> voice above room noise, dashed line is the threshold &nbsp; <span style="color:#e07b00">■</span> 19 kHz echo motion</div>
+<div class="meta"><span style="color:#1a5fd0">■</span> voice level, dashed line is the threshold &nbsp; <span style="color:#e07b00">■</span> 19 kHz echo motion</div>
 <div id="carrier" class="meta"></div>
 <div id="log"></div>
 
@@ -44,7 +44,7 @@ You need to have the volume up and the silent switch off. Click on how it works 
 <ol class="note">
   <li><b>Speech.</b> Loudness and pitch periodicity every 10 ms.</li>
   <li><b>Phone face up.</b> Face down means leave me alone, like Pixel's Flip to Shhh.</li>
-  <li><b>Speaker being closeby.</b> The phone plays an inaudible 19 kHz tone, and your lip and jaw motion should Doppler-shift the echo, shown as the orange line. Two small conv nets, one for audio and one for the echo spectrogram, learned whether a voice and an echo come from the same moment. They were self-supervised trained with a contrastive loss on 10 minutes of unlabeled phone audio (aka me, Ashir, reading Kafka's Metamorphosis with Danza Kaduro playing in the background). A spike in loudness above the room's noise floor can also pass this, you can pick in the dropdown above whether you need both or just one of these to pass</li>
+  <li><b>Speaker being closeby.</b> The phone plays an inaudible 19 kHz tone, and your lip and jaw motion should Doppler-shift the echo, shown as the orange line. Two small conv nets, one for audio and one for the echo spectrogram, learned whether a voice and an echo come from the same moment. They were self-supervised trained with a contrastive loss on 10 minutes of unlabeled phone audio (aka me, Ashir, reading Kafka's Metamorphosis with Danza Kaduro playing in the background). A loud enough voice can also pass this, you can pick in the dropdown above whether you need both or just one of these to pass</li>
   <li><b>Transcribing what was said.</b> Whisper-tiny.</li>
   <li><b>Is it a request.</b> Nearest examples in MiniLM sentence-embedding space.</li>
 </ol>
@@ -65,20 +65,20 @@ You need to have the volume up and the silent switch off. Click on how it works 
 <p class="note"><a href="record.html">Recorder page</a> for collecting labeled scenes.</p>
 </details>
 
-<script src="detector.js?v=2"></script>
-<script src="intent.js?v=2"></script>
-<script src="sync.js?v=2"></script>
+<script src="detector.js?v=3"></script>
+<script src="intent.js?v=3"></script>
+<script src="sync.js?v=3"></script>
 <script type="module">
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
 
-const NEAR = 27.5, SYNC = 0.085, F0 = 19000;  // sync shows as +0.09 or more
-const BOTH_NEAR = 20;  // background noise eats into this margin, so with the echo also required it is lower
+const LOUD = -58, SYNC = 0.085, F0 = 19000;  // voice level in dB re full scale, sync shows as +0.09 or more
+const ABOVE_NOISE = 15;  // and the voice still has to stand out from the room
 const TONE_MIN = -45, TONE_MAX = -15;  // the echo works from about -41 to -13 dB, it breaks near -5
 let toneGain, gainNow = 0.3, lastStep = 0;  // output gain of the tone, eased down when the mic hears it louder than TONE_MAX
 const tone = new Float32Array(1024);  // tone level per hop, indexed by hop number mod 1024
 const $ = id => document.getElementById(id);
 let det, asr, intent, queue = [], busy = false, faceDown = false;  // face down = "leave me alone", as in Pixel's Flip to Shhh
-const syncReady = fetch("sync_weights.json?v=2").then(r => r.json()).then(makeSync);
+const syncReady = fetch("sync_weights.json?v=3").then(r => r.json()).then(makeSync);
 const trace = { near: [], motion: [], utt: [] }, SPAN = 600;
 
 const worklet = `registerProcessor("rec", class extends AudioWorkletProcessor {
@@ -139,7 +139,7 @@ let lastCarrier = -200;
 function onAudio(x) {
   const { hops, utterances } = det.push(x);
   for (const h of hops) {
-    trace.near.push(h.lvl - h.floor); trace.motion.push(h.motion); trace.utt.push(0);
+    trace.near.push(h.lvl); trace.motion.push(h.motion); trace.utt.push(0);
     lastCarrier = h.carrier; tone[h.t % 1024] = h.carrier;
   }
   // one small step every 0.5 s on a smooth ramp, so the gain change doesn't leak into the Doppler bins
@@ -171,11 +171,11 @@ async function pump() {
   busy = true;
   while (queue.length) {
     const u = queue.shift(), mode = $("mode").value, sync = (await syncReady)(u);
-    const loudOk = u.near >= (mode === "both" ? BOTH_NEAR : NEAR), syncOk = sync >= SYNC;
+    const loudOk = u.voice >= LOUD && u.near >= ABOVE_NOISE, syncOk = sync >= SYNC;
     const here = mode === "both" ? loudOk && syncOk : mode === "ultrasound" ? syncOk : loudOk;
     const sgn = v => (v >= 0 ? "+" : "") + v.toFixed(2), mark = ok => (ok ? "✓" : "✗");
     const cues = `ultrasound sync ${sgn(sync)} ${mark(syncOk)}${mode === "loudness" ? " unused" : ""}`
-      + ` · level ${u.near.toFixed(0)} dB ${mark(loudOk)}${mode === "ultrasound" ? " unused" : ""}`
+      + ` · level ${u.voice.toFixed(0)} dB ${mark(loudOk)}${mode === "ultrasound" ? " unused" : ""}`
       + ` · tone ${u.tone.toFixed(0)} dB`;
     if (u.faceDown) {
       addLog(false, "Ignored, phone is face down", "", cues);
@@ -183,7 +183,7 @@ async function pump() {
       continue;
     }
     if (!here) {
-      const why = mode === "loudness" || syncOk ? "voice not loud enough over the background"
+      const why = mode === "loudness" || syncOk ? "voice too quiet, probably too far away"
         : u.tone < TONE_MIN ? "the 19 kHz tone is too quiet to hear an echo" : "voice doesn't match the echo";
       addLog(false, `Ignored, ${why}`, "", cues);
       setVerdict("#bbb", `Ignored, ${why}`);
@@ -222,9 +222,9 @@ function draw() {
   };
   const mlo = Math.min(...trace.motion.slice(-SPAN)), mhi = Math.max(...trace.motion.slice(-SPAN));
   line(trace.motion, mlo - 1, mhi + 1, "#e07b00");
-  line(trace.near, 0, 45, "#1a5fd0");
+  line(trace.near, -80, -35, "#1a5fd0");
   c.setLineDash([6, 6]); c.strokeStyle = "#1a5fd0"; c.lineWidth = devicePixelRatio;
-  const yN = H - ($("mode").value === "both" ? BOTH_NEAR : NEAR) / 45 * H; c.beginPath(); c.moveTo(0, yN); c.lineTo(W, yN); c.stroke(); c.setLineDash([]);
+  const yN = H - (LOUD + 80) / 45 * H; c.beginPath(); c.moveTo(0, yN); c.lineTo(W, yN); c.stroke(); c.setLineDash([]);
   $("carrier").textContent = lastCarrier > TONE_MIN ? "" : "⚠ The 19 kHz tone is too quiet. Turn the volume up, switch off silent mode and uncover the bottom speaker.";
   requestAnimationFrame(draw);
 }
