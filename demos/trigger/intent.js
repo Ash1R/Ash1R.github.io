@@ -10,6 +10,8 @@ const REQUESTS = [
   "what's the capital of australia", "skip this song", "how many calories are in an apple", "text sarah I'm running late",
   "hey google what's your favorite movie", "are you listening to me", "can you help me with something", "give me a recipe for pancakes",
   "I'm asking you, how far away is the moon", "do you know any good restaurants nearby", "answer my question", "find me a flight to boston",
+  "tell me about albert einstein", "who is taylor swift", "what is photosynthesis", "explain how vaccines work",
+  "tell me about the roman empire", "who founded microsoft", "what does a ceo do", "look up elon musk",
 ];
 const CHAT = [
   "yeah I'll be there in like ten minutes", "did you see what happened at work", "I don't know, what do you think",
@@ -20,6 +22,8 @@ const CHAT = [
   "so basically what happened was", "don't forget to like and subscribe", "are you coming to the party", "hold on one sec",
   "I'm just working on this thing right now", "it's been a really long week", "I was thinking we could try something else",
   "my boss wants it done by friday", "anyway I'll tell you more later", "it's going pretty well actually", "um yeah so",
+  "I told him about it yesterday", "she was telling me about her trip", "you know who I ran into today", "today we're talking about the history of rome",
+  "in this video I'll show you how it works", "my brother is obsessed with that company",
 ];
 
 async function makeIntent(pipeline) {
