@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ultrasound trigger recorder</title>
+<style>
+  body { font: 17px/1.45 -apple-system, system-ui, sans-serif; max-width: 34rem; margin: 0 auto; padding: 1.2rem; color: #111; }
+  button { font: inherit; padding: .7rem 1.1rem; margin: .3rem .3rem .3rem 0; border-radius: .6rem; border: 1px solid #888; background: #f4f4f4; }
+  button.go { background: #111; color: #fff; border-color: #111; }
+  button:disabled { opacity: .4; }
+  .box { border: 1px solid #ddd; border-radius: .7rem; padding: .9rem 1rem; margin: 1rem 0; }
+  .bad { color: #b00020; } .ok { color: #0a7a2f; }
+  #scene { font-size: 1.15rem; } #count { font-size: 2.4rem; font-variant-numeric: tabular-nums; }
+  small { color: #555; }
+</style>
+</head>
+<body>
+<h2>Ultrasound trigger recorder</h2>
+<p><small>The phone plays an inaudible 19 kHz tone and records your voice plus the tone's echo off your face. Nothing leaves the phone: you download one WAV file and move it to your laptop. Turn the volume up, the silent switch off, and the case off the bottom speaker.</small></p>
+
+<button class="go" id="start">Start audio</button>
+<div class="box" id="check" hidden></div>
+
+<div id="modes" hidden>
+  <button id="guided">Guided scenes (2 rounds × 7)</button>
+  <button id="free">Free session</button>
+  <label><input id="mins" type="number" value="10" min="1" max="20" style="width:3.5rem"> min</label>
+</div>
+
+<div class="box" id="run" hidden>
+  <div id="scene"></div>
+  <p id="instr"></p>
+  <div id="count"></div>
+  <button class="go" id="go">Start scene</button>
+  <button id="redo" disabled>Redo last</button>
+  <button id="stop" hidden>Stop &amp; save</button>
+</div>
+<p id="status"></p>
+
+<script>
+const F0 = 19000, SECONDS = 30, ROUNDS = 2;
+const SCENES = [  // [name, addressed to assistant?, instruction] — names match record.py
+  ["directed_facing", 1, "Phone on the table in front of you (or in your hand), ~40 cm away, bottom edge toward you. Ask it questions / give it commands. Pause between requests."],
+  ["directed_offaxis", 1, "Same, but rotate the phone so its bottom edge points ~90° away from you (or lay it beside you). The 'pointed the wrong way' case."],
+  ["phone_call_near", 0, "Talk to someone (or on a call on another device) right next to this phone. Do NOT address the phone."],
+  ["far_talk", 0, "Walk ~3 m away and talk (to anyone) from across the room."],
+  ["video", 0, "Sit by the phone silently but naturally; play a talking video / podcast on your laptop ~1.5 m from the phone."],
+  ["noise", 0, "Make everyday noise without talking: type, move things, music, dishes, walk around."],
+  ["silent_working", 0, "Sit with the phone in front of you and work silently on your laptop."],
+];
+const $ = id => document.getElementById(id);
+let ctx, fs, track, chunks = [], captured = 0, capturing = false, ring, head = 0, filled = 0, segs = [], mode;
+
+const worklet = `registerProcessor("rec", class extends AudioWorkletProcessor {
+  process(inputs) { const x = inputs[0][0]; if (x) this.port.postMessage(x.slice(0)); return true; }
+});`;
+
+$("start").onclick = async () => {
+  $("start").disabled = true;
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = "play-and-record";
+    ctx = new AudioContext({ sampleRate: 48000 });  // created inside the tap: iOS only allows audio started by a gesture
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: {
+      echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, sampleRate: 48000 } });
+    track = stream.getAudioTracks()[0];
+    let src;
+    try { src = ctx.createMediaStreamSource(stream); }
+    catch { ctx.close(); ctx = new AudioContext(); src = ctx.createMediaStreamSource(stream); }  // Firefox: mic rate must match
+    fs = ctx.sampleRate;
+    ring = new Float32Array(Math.round(fs / 2));
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([worklet], { type: "application/javascript" })));
+    const rec = new AudioWorkletNode(ctx, "rec"), sink = ctx.createGain();
+    sink.gain.value = 0;
+    src.connect(rec).connect(sink).connect(ctx.destination);
+    rec.port.onmessage = e => onAudio(e.data);
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.frequency.value = F0; g.gain.value = 0.3;
+    osc.connect(g).connect(ctx.destination); osc.start();
+    await ctx.resume();
+    navigator.wakeLock?.request("screen").catch(() => {});
+    setInterval(selfCheck, 700);
+    $("check").hidden = $("modes").hidden = false;
+  } catch (err) {
+    $("status").innerHTML = `<span class="bad">Could not start audio: ${err.message}</span>`;
+    $("start").disabled = false;
+  }
+};
+
+function onAudio(x) {
+  for (let i = 0; i < x.length; i++) ring[(head + i) % ring.length] = x[i];
+  head = (head + x.length) % ring.length; filled = Math.min(ring.length, filled + x.length);
+  if (!capturing) return;
+  const q = new Int16Array(x.length);
+  for (let i = 0; i < x.length; i++) q[i] = Math.max(-32768, Math.min(32767, Math.round(x[i] * 32767)));
+  chunks.push(q);
+  captured += x.length;
+}
+
+function power(x, f) {  // Hann-windowed Goertzel
+  const w = 2 * Math.cos(2 * Math.PI * f / fs);
+  let s1 = 0, s2 = 0;
+  for (let i = 0; i < x.length; i++) {
+    const s = x[i] * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / x.length)) + w * s1 - s2;
+    s2 = s1; s1 = s;
+  }
+  return s1 * s1 + s2 * s2 - w * s1 * s2;
+}
+
+function selfCheck() {
+  if (filled < ring.length) return;
+  const recent = new Float32Array(ring.length);
+  recent.set(ring.subarray(head)); recent.set(ring.subarray(0, head), ring.length - head);
+  const c = power(recent, F0), n = [-400, -250, 250, 400].reduce((a, d) => a + power(recent, F0 + d), 0) / 4;
+  const snr = 10 * Math.log10(c / (n + 1e-20)), lvl = 10 * Math.log10(c / (recent.length ** 2 / 16) + 1e-20);
+  const s = track.getSettings(), proc = ["echoCancellation", "noiseSuppression", "autoGainControl"].filter(k => s[k]);
+  const ok = snr > 25 && fs >= 44100 && !proc.length;
+  $("check").innerHTML = `<b class="${ok ? "ok" : "bad"}">${ok ? "Ultrasound OK" : "Ultrasound problem"}</b><br>
+    19 kHz echo ${snr.toFixed(0)} dB above nearby noise (want &gt; 25), level ${lvl.toFixed(0)} dBFS, ${fs} Hz` +
+    (proc.length ? `<br><span class="bad">Browser is still applying: ${proc.join(", ")}</span>` : "") +
+    (snr <= 25 ? `<br><small>Raise the volume, uncover the bottom speaker/mic; if it stays low this phone/browser filters ultrasound.</small>` : "");
+}
+
+const beep = () => {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.frequency.value = 880; g.gain.value = 0.15;
+  o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.15);
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function resetCapture(m) {
+  mode = m; chunks = []; captured = 0; segs = [];
+  $("modes").hidden = true; $("run").hidden = false;
+}
+
+let idx = 0;  // position in the guided schedule
+const schedule = [...Array(ROUNDS)].flatMap((_, k) => SCENES.map(s => [k + 1, ...s]));
+function showScene() {
+  const [round, name, , instr] = schedule[idx];
+  $("scene").innerHTML = `<b>${idx + 1}/${schedule.length}</b> · round ${round} · <b>${name}</b>`;
+  $("instr").textContent = instr;
+  $("count").textContent = "";
+}
+
+$("guided").onclick = () => { resetCapture("guided"); idx = 0; showScene(); };
+
+$("go").onclick = async () => {
+  if (mode === "free") return runFree();
+  const [round, name, directed] = schedule[idx];
+  $("go").disabled = $("redo").disabled = true;
+  for (let t = 2; t > 0; t--) { $("count").textContent = `starting in ${t}…`; await sleep(1000); }
+  const start = captured;
+  capturing = true;
+  for (let t = SECONDS; t > 0; t--) { $("count").textContent = `${t} s`; await sleep(1000); }
+  capturing = false;
+  segs.push({ name, round, directed, start, end: captured });
+  beep();
+  idx++;
+  $("go").disabled = false; $("redo").disabled = false;
+  if (idx < schedule.length) showScene();
+  else { save(); $("go").disabled = $("redo").disabled = true; $("count").textContent = "done ✓"; }
+};
+
+$("redo").onclick = () => {
+  const s = segs.pop();
+  let drop = s.end - s.start;
+  while (drop > 0) { const c = chunks.pop(); drop -= c.length; }  // segment boundaries fall on chunk boundaries
+  captured = s.start; idx--; showScene();
+  $("redo").disabled = !segs.length;
+};
+
+$("free").onclick = () => {
+  resetCapture("free");
+  $("scene").innerHTML = "<b>Free session</b> (unlabeled)";
+  $("instr").textContent = "Keep the phone near you and live normally: talk to it, to people, on calls; play videos; make noise. Variety helps.";
+  $("redo").hidden = true;
+};
+
+async function runFree() {
+  const secs = 60 * +$("mins").value;
+  $("go").hidden = true; $("stop").hidden = false;
+  capturing = true;
+  for (let t = secs; t > 0 && capturing; t--) { $("count").textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; await sleep(1000); }
+  if (capturing) finishFree();
+}
+const finishFree = () => { capturing = false; $("stop").hidden = true; $("count").textContent = "done ✓"; save(); };
+$("stop").onclick = finishFree;
+
+function save() {  // 16-bit mono WAV with the scene timeline in a custom "lbls" chunk
+  const meta = new TextEncoder().encode(JSON.stringify({ mode, fs, f0: F0, ua: navigator.userAgent, segs }));
+  const ml = meta.length + (meta.length & 1), dl = captured * 2;
+  const h = new DataView(new ArrayBuffer(44 + 8 + ml)), str = (o, s) => [...s].forEach((c, i) => h.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF"); h.setUint32(4, 4 + 24 + 8 + ml + 8 + dl, true); str(8, "WAVE");
+  str(12, "fmt "); h.setUint32(16, 16, true); h.setUint16(20, 1, true); h.setUint16(22, 1, true);
+  h.setUint32(24, fs, true); h.setUint32(28, fs * 2, true); h.setUint16(32, 2, true); h.setUint16(34, 16, true);
+  str(36, "lbls"); h.setUint32(40, meta.length, true); new Uint8Array(h.buffer, 44, meta.length).set(meta);
+  str(44 + ml, "data"); h.setUint32(48 + ml, dl, true);
+  const url = URL.createObjectURL(new Blob([h.buffer, ...chunks], { type: "audio/wav" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: `trigger_${mode}_${Date.now()}.wav` });
+  document.body.append(a); a.click();
+  $("status").innerHTML = `Saved ${(captured / fs / 60).toFixed(1)} min. If nothing downloaded, <a href="${url}" download="${a.download}">tap here</a>. Then AirDrop / send it to your laptop.`;
+}
+</script>
+</body>
+</html>
