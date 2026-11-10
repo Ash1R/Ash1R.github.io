@@ -72,7 +72,8 @@ You need to have the volume up and the silent switch off. Click on how it works 
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
 
 const NEAR = 27.5, SYNC = 0.05, F0 = 19000;  // both thresholds set on round 1 of the phone recordings
-const TONE_MIN = -30;  // the tone arrived at about -16 dB in every recording, well below that the echo is just noise
+const TONE_MIN = -45, TONE_MAX = -15;  // the echo works from about -41 to -13 dB, it breaks near -5
+let toneGain, gainNow = 0.3, lastStep = 0;  // output gain of the tone, eased down when the mic hears it louder than TONE_MAX
 const tone = new Float32Array(1024);  // tone level per hop, indexed by hop number mod 1024
 const $ = id => document.getElementById(id);
 let det, asr, intent, queue = [], busy = false, faceDown = false;  // face down = "leave me alone", as in Pixel's Flip to Shhh
@@ -104,7 +105,7 @@ $("start").onclick = async () => {
     src.connect(rec).connect(sink).connect(ctx.destination);
     rec.port.onmessage = e => onAudio(e.data);
     const osc = ctx.createOscillator(), g = ctx.createGain();
-    osc.frequency.value = F0; g.gain.value = 0.3;
+    osc.frequency.value = F0; g.gain.value = 0.3; toneGain = g.gain;
     osc.connect(g).connect(ctx.destination); osc.start();
     await ctx.resume();
     // iOS suspends the page's audio when another app or tab starts playing
@@ -139,6 +140,12 @@ function onAudio(x) {
   for (const h of hops) {
     trace.near.push(h.lvl - h.floor); trace.motion.push(h.motion); trace.utt.push(0);
     lastCarrier = h.carrier; tone[h.t % 1024] = h.carrier;
+  }
+  // one small step every 0.5 s on a smooth ramp, so the gain change doesn't leak into the Doppler bins
+  if (toneGain && hops.length && det.t - lastStep >= 50) {
+    lastStep = det.t;
+    const db = lastCarrier > TONE_MAX + 2 ? -1 : lastCarrier < TONE_MAX - 4 ? 0.5 : 0;
+    if (db) { gainNow = Math.min(0.3, Math.max(0.003, gainNow * 10 ** (db / 20))); toneGain.setTargetAtTime(gainNow, 0, 0.15); }
   }
   for (const k in trace) if (trace[k].length > SPAN) trace[k].splice(0, trace[k].length - SPAN);
   for (const u of utterances) {
