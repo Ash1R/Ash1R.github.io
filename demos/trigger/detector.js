@@ -3,7 +3,9 @@
 // Every 10 ms hop:  lvl    voice-band loudness (dB)
 //                   motion Doppler energy 15-80 Hz around the 19 kHz carrier, relative to the carrier (dB)
 //                   voiced periodicity in the 80-400 Hz pitch range (0-1)
-// Utterances (voiced speech, ended by 500 ms of quiet) come out with 16 kHz audio for speech recognition and two closeness cues:
+//                   mel    24 log-mel bands (60-3800 Hz), dop  18-bin Doppler image (log power relative to carrier)
+// Utterances (voiced speech, ended by 500 ms of quiet) come out with 16 kHz audio for speech recognition, mel/dop frames
+// for the learned sync model (sync.js), and two hand-made cues:
 //                   near   how far the voice rises above the room's noise floor (dB)
 //                   echo   whether loudness and echo motion rise and fall together (correlation at true alignment
 //                          minus at ±0.4/0.7 s shifts, so smooth trends that correlate by chance cancel)
@@ -26,7 +28,35 @@ function corr(a, b) {
   return xy / Math.sqrt(xx * yy + 1e-20);
 }
 
-const LAGS = [40, 70], KEEP = 3000, AUDIO_S = 12;
+function fft(re, im) {  // in-place radix-2
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let b = n >> 1;
+    for (; j & b; b >>= 1) j ^= b;
+    j ^= b;
+    if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const a = -2 * Math.PI / len;
+    for (let i = 0; i < n; i += len)
+      for (let k = 0; k < len / 2; k++) {
+        const c = Math.cos(a * k), s = Math.sin(a * k), p = i + k, q = p + len / 2;
+        const tr = re[q] * c - im[q] * s, ti = re[q] * s + im[q] * c;
+        re[q] = re[p] - tr; im[q] = im[p] - ti; re[p] += tr; im[p] += ti;
+      }
+  }
+}
+
+function melBank(m, nfft, fs, lo, hi) {  // HTK-style triangles over the nfft/2+1 power bins
+  const mel = f => 2595 * Math.log10(1 + f / 700), hz = v => 700 * (10 ** (v / 2595) - 1);
+  const edges = Array.from({ length: m + 2 }, (_, i) => hz(mel(lo) + (mel(hi) - mel(lo)) * i / (m + 1)));
+  return Array.from({ length: m }, (_, j) => Float64Array.from({ length: nfft / 2 + 1 }, (_, k) => {
+    const f = k * fs / nfft, [a, b, c] = edges.slice(j, j + 3);
+    return Math.max(0, Math.min((f - a) / (b - a), (c - f) / (c - b)));
+  }));
+}
+
+const LAGS = [40, 70], KEEP = 3000, AUDIO_S = 12, NMEL = 24, PAD = 100;
 
 class Detector {
   constructor(fs, f0 = 19000) {
@@ -39,7 +69,7 @@ class Detector {
     this.N = 128;                    // 128 ms Doppler window, as in the notebook
     this.re = new Float64Array(this.N); this.im = new Float64Array(this.N); this.bp = 0;
     this.ar = 0; this.ai = 0; this.an = 0; this.bbn = 0;
-    const bins = [0, ...[2, 3, 4, 5, 6, 7, 8, 9, 10].flatMap(k => [k, -k])];  // carrier, 15.6-78 Hz sidebands
+    const bins = [0, -10, -9, -8, -7, -6, -5, -4, -3, -2, 2, 3, 4, 5, 6, 7, 8, 9, 10];  // carrier, then the ±15.6-78 Hz Doppler image
     this.tw = bins.map(k => Array.from({ length: this.N }, (_, n) => {
       const h = 0.5 - 0.5 * Math.cos(2 * Math.PI * n / this.N), a = -2 * Math.PI * k * n / this.N;
       return [h * Math.cos(a), h * Math.sin(a)];
@@ -47,9 +77,10 @@ class Detector {
     this.hp = biquad("hp", 100, fs); this.lp1 = biquad("lp", 3400, fs); this.lp2 = biquad("lp", 3400, fs);
     this.D8 = Math.round(fs / 8000); this.fs8 = fs / this.D8;
     this.a8 = new Float64Array(256); this.ap = 0; this.dn = 0; this.en = 0; this.enN = 0;
+    this.mel = melBank(NMEL, 256, this.fs8, 60, 3800);
     this.w1 = biquad("lp", 7000, fs); this.w2 = biquad("lp", 7000, fs); this.fsA = fs / 3;  // speech-recognition audio
     this.audio = new Float32Array(Math.round(this.fsA * AUDIO_S)); this.na = 0; this.d3 = 0;
-    this.h = { lvl: [], motion: [], voiced: [], floor: [] }; this.t0 = 0; this.t = 0;
+    this.h = { lvl: [], motion: [], voiced: [], floor: [], mel: [], dop: [] }; this.t0 = 0; this.t = 0;
     this.floor = null; this.utt = null;
   }
 
@@ -98,8 +129,13 @@ class Detector {
       for (let n = 0; n + l < L; n++) { xy += s[n] * s[n + l]; xx += s[n] * s[n]; yy += s[n + l] * s[n + l]; }
       voiced = Math.max(voiced, xy / Math.sqrt(xx * yy + 1e-20));
     }
+    const fr = Float64Array.from(s, (v, n) => v * (0.5 - 0.5 * Math.cos(2 * Math.PI * n / L))), fi = new Float64Array(L);
+    fft(fr, fi);
+    const mel = Float32Array.from(this.mel, w => Math.log(w.reduce((a, wk, k) => a + wk * (fr[k] ** 2 + fi[k] ** 2), 0) + 1e-10));
+    const dop = Float32Array.from(pw.slice(1), p => Math.log((p + 1e-20) / (carrier + 1e-20)));
+
     this.floor = this.floor === null ? lvl : Math.min(this.floor + 0.02, lvl);  // noise floor, rises 2 dB/s
-    for (const [k, v] of [["lvl", lvl], ["motion", motion], ["voiced", voiced], ["floor", this.floor]]) this.h[k].push(v);
+    for (const [k, v] of [["lvl", lvl], ["motion", motion], ["voiced", voiced], ["floor", this.floor], ["mel", mel], ["dop", dop]]) this.h[k].push(v);
     if (this.h.lvl.length > KEEP) { for (const k in this.h) this.h[k].splice(0, 1000); this.t0 += 1000; }
     this.t++;
     return { t: this.t - 1, lvl, motion, voiced, floor: this.floor, carrier: 10 * Math.log10(carrier + 1e-20) };
@@ -133,7 +169,8 @@ class Detector {
     const n = Math.round((b - a) * this.fsA / 100), A = this.audio.length, end = this.na - (this.t - b) * Math.round(this.fsA / 100);
     const audio = new Float32Array(Math.min(n, A));
     for (let i = 0; i < audio.length; i++) audio[i] = this.audio[((end - audio.length + i) % A + A) % A];
-    return { start: a, end: b, near, echo, audio, fs: this.fsA };
+    return { start: a, end: b, near, echo, audio, fs: this.fsA,
+             mel: this.range("mel", a - PAD, b), dop: this.range("dop", a - PAD, b), pad: PAD };  // with 1 s of lead-in context
   }
 }
 

@@ -25,6 +25,12 @@ Try: hold the phone ~40 cm away and ask <i>"what's the capital of Japan?"</i>. T
 Volume up, silent switch off. Everything runs on the phone; no audio leaves it.</p>
 
 <button id="start">Start</button> <span id="load" class="note"></span>
+<p class="note">"Is the speaker right here?" uses
+<select id="mode">
+  <option value="both">loudness + ultrasound</option>
+  <option value="ultrasound">ultrasound only</option>
+  <option value="loudness">loudness only</option>
+</select></p>
 
 <div id="light"><div id="dot"></div><div id="verdict">Not started</div></div>
 <canvas id="cv"></canvas>
@@ -37,22 +43,34 @@ Volume up, silent switch off. Everything runs on the phone; no audio leaves it.<
 <p class="note">Every sound goes through a cascade. Each stage only runs if the previous one passed, so the expensive models stay off most of the time:</p>
 <ol class="note">
   <li><b>Speech?</b> Loudness and pitch periodicity, every 10 ms (hand-written DSP).</li>
-  <li><b>Close to the phone?</b> How far the voice rises above the room's noise floor. The threshold (27.5 dB) was set on round 1 of my phone recordings. On round 2 it rejected all far talk, video and noise (0 of 14), and passed 10 of 10 utterances spoken to the phone.</li>
-  <li><b>What was said?</b> Whisper-tiny (pretrained, in-browser).</li>
-  <li><b>Is it a request?</b> Nearest examples in a pretrained sentence-embedding space (MiniLM). This is the weak stage. It still lets through some chat said close to the phone, and fixing that needs real data.</li>
+  <li><b>Is the speaker right here?</b> Two cues:
+    <ul>
+      <li><b>Ultrasound (the research part).</b> The phone plays an inaudible 19 kHz tone, and lip and jaw motion Doppler-shift its echo (orange trace). Two small causal conv nets, one for audio and one for the echo-as-image, were trained self-supervised to tell whether a voice and an echo come from the same moment (contrastive learning, no labels, 10 min of unlabeled phone audio). Per utterance, the score compares true alignment with time-shifted alignments. It runs here in plain JS, about 50 ms per utterance.</li>
+      <li><b>Loudness:</b> how far the voice rises above the room's noise floor.</li>
+    </ul></li>
+  <li><b>What was said?</b> Whisper-tiny (pretrained, in-browser). Only runs if stage 2 passed.</li>
+  <li><b>Is it a request?</b> Nearest examples in a pretrained sentence-embedding space (MiniLM). This is the weak stage.</li>
 </ol>
-<p class="note">The orange trace is the research part. The phone plays an inaudible 19 kHz tone, and lip/jaw motion Doppler-shifts its echo. A self-supervised model I trained on that echo matched audio to the right echo moment 60% of the time when I talked to the phone, against 19% for a video (chance 12%). On my 4 minutes of labeled data it didn't yet beat the loudness cue, so it's shown here but not used in the decision.</p>
+<p class="note"><b>Honest numbers</b> from my phone recordings. Thresholds were set on round 1 and tested on round 2 (10 utterances spoken to the phone, 21 others: across the room, a video, a phone call next to it, noise):</p>
+<ul class="note">
+  <li>Loudness + request: responds to 7/10, false triggers 0/21.</li>
+  <li>Ultrasound only + request (no loudness at all): responds to 7/10, false triggers 3/21 (2 of 3 video clips).</li>
+  <li>Both + request: responds to 6/10, false triggers 0/21.</li>
+</ul>
+<p class="note">The ultrasound alone matches loudness on hits. On round 1 it also let fewer phone-call lines through (1/5 vs 3/5), but that's the round its threshold was set on. With one speaker and minutes of data, these are hints, not results. The video case is the one to fix, and it needs more data.</p>
 <p class="note"><a href="record.html">Recorder page</a> (labeled scenes for training).</p>
 </details>
 
 <script src="detector.js"></script>
 <script src="intent.js"></script>
+<script src="sync.js"></script>
 <script type="module">
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
 
-const NEAR = 27.5, F0 = 19000;
+const NEAR = 27.5, SYNC = 0.05, F0 = 19000;  // both thresholds set on round 1 of the phone recordings
 const $ = id => document.getElementById(id);
 let det, asr, intent, queue = [], busy = false;
+const syncReady = fetch("sync_weights.json").then(r => r.json()).then(makeSync);
 const trace = { near: [], motion: [], utt: [] }, SPAN = 600;
 
 const worklet = `registerProcessor("rec", class extends AudioWorkletProcessor {
@@ -128,18 +146,23 @@ async function pump() {
   if (busy) return;
   busy = true;
   while (queue.length) {
-    const u = queue.shift(), echo = `echo agreement ${u.echo >= 0 ? "+" : ""}${u.echo.toFixed(2)} (experimental, unused)`;
-    if (u.near < NEAR) {
-      addLog(false, "Ignored: not close to the phone", "", `level ${u.near.toFixed(0)} dB (needs ${NEAR}) · speech recognition skipped · ${echo}`);
-      setVerdict("#bbb", "Ignored: speech, but not close to the phone");
+    const u = queue.shift(), mode = $("mode").value, sync = (await syncReady)(u);
+    const loudOk = u.near >= NEAR, syncOk = sync > SYNC;
+    const here = mode === "both" ? loudOk && syncOk : mode === "ultrasound" ? syncOk : loudOk;
+    const sgn = v => (v >= 0 ? "+" : "") + v.toFixed(2), mark = ok => (ok ? "✓" : "✗");
+    const cues = `ultrasound sync ${sgn(sync)} ${mark(syncOk)} (needs > ${SYNC})${mode === "loudness" ? " [not used]" : ""}`
+      + ` · level ${u.near.toFixed(0)} dB ${mark(loudOk)} (needs ${NEAR})${mode === "ultrasound" ? " [not used]" : ""}`;
+    if (!here) {
+      const why = mode !== "loudness" && !syncOk ? "voice doesn't match the echo" : "too quiet / far";
+      addLog(false, `Ignored: not from someone right here (${why})`, "", `${cues} · speech recognition skipped`);
+      setVerdict("#bbb", `Ignored: speech, but not from someone right here (${why})`);
       continue;
     }
-    if (!asr || !intent) { addLog(false, "Close speech (models still loading)", "", `level ${u.near.toFixed(0)} dB · ${echo}`); continue; }
-    setVerdict("#f2c200", "Close speech… transcribing");
+    if (!asr || !intent) { addLog(false, "Speaker is here (models still loading)", "", cues); continue; }
+    setVerdict("#f2c200", "Speaker is here… transcribing");
     const t0 = performance.now(), text = (await asr(to16k(u))).text.trim(), { score } = await intent(text);
     const ms = Math.round(performance.now() - t0), yes = score > 0;
-    addLog(yes, yes ? "Would respond" : "Ignored: not a request", text,
-      `level ${u.near.toFixed(0)} dB · request score ${score >= 0 ? "+" : ""}${score.toFixed(2)} · ${ms} ms · ${echo}`);
+    addLog(yes, yes ? "Would respond" : "Ignored: not a request", text, `${cues} · request ${sgn(score)} · ${ms} ms`);
     setVerdict(yes ? "#0a7a2f" : "#bbb", yes ? `Would respond: “${text}”` : `Ignored: “${text}” isn't a request`);
   }
   busy = false;
