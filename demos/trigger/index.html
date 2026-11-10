@@ -43,12 +43,13 @@ Volume up, silent switch off. Everything runs on the phone; no audio leaves it.<
 <p class="note">Every sound goes through a cascade. Each stage only runs if the previous one passed, so the expensive models stay off most of the time:</p>
 <ol class="note">
   <li><b>Speech?</b> Loudness and pitch periodicity, every 10 ms (hand-written DSP).</li>
+  <li><b>Phone face up?</b> Motion sensors. Face down means "leave me alone", as in Pixel's Flip to Shhh. The ultrasound can't tell this: the speaker and mic are on the bottom edge, which sees you either way.</li>
   <li><b>Is the speaker right here?</b> Two cues:
     <ul>
       <li><b>Ultrasound (the research part).</b> The phone plays an inaudible 19 kHz tone, and lip and jaw motion Doppler-shift its echo (orange trace). Two small causal conv nets, one for audio and one for the echo-as-image, were trained self-supervised to tell whether a voice and an echo come from the same moment (contrastive learning, no labels, 10 min of unlabeled phone audio). Per utterance, the score compares true alignment with time-shifted alignments. It runs here in plain JS, about 50 ms per utterance.</li>
       <li><b>Loudness:</b> how far the voice rises above the room's noise floor.</li>
     </ul></li>
-  <li><b>What was said?</b> Whisper-tiny (pretrained, in-browser). Only runs if stage 2 passed.</li>
+  <li><b>What was said?</b> Whisper-tiny (pretrained, in-browser). Only runs if the stages above passed.</li>
   <li><b>Is it a request?</b> Nearest examples in a pretrained sentence-embedding space (MiniLM). This is the weak stage.</li>
 </ol>
 <p class="note"><b>Honest numbers</b> from my phone recordings. Thresholds were set on round 1 and tested on round 2 (10 utterances spoken to the phone, 21 others: across the room, a video, a phone call next to it, noise):</p>
@@ -69,7 +70,7 @@ import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers
 
 const NEAR = 27.5, SYNC = 0.05, F0 = 19000;  // both thresholds set on round 1 of the phone recordings
 const $ = id => document.getElementById(id);
-let det, asr, intent, queue = [], busy = false;
+let det, asr, intent, queue = [], busy = false, faceDown = false;  // face down = "leave me alone", as in Pixel's Flip to Shhh
 const syncReady = fetch("sync_weights.json").then(r => r.json()).then(makeSync);
 const trace = { near: [], motion: [], utt: [] }, SPAN = 600;
 
@@ -79,6 +80,10 @@ const worklet = `registerProcessor("rec", class extends AudioWorkletProcessor {
 
 $("start").onclick = async () => {
   $("start").disabled = true;
+  // iOS only grants motion sensors from inside the tap, so ask before any await
+  const ask = window.DeviceOrientationEvent?.requestPermission;
+  (ask ? DeviceOrientationEvent.requestPermission().catch(() => "denied") : Promise.resolve("granted"))
+    .then(p => p === "granted" && addEventListener("deviceorientation", e => { if (e.beta !== null) faceDown = Math.abs(e.beta) > 140; }));
   try {
     if (navigator.audioSession) navigator.audioSession.type = "play-and-record";
     let ctx = new AudioContext({ sampleRate: 48000 });  // created inside the tap: iOS only allows audio started by a gesture
@@ -131,6 +136,7 @@ function onAudio(x) {
   for (const u of utterances) {
     const back = det.t - u.start, n = det.t - u.end;
     for (let i = Math.max(0, trace.utt.length - back); i < trace.utt.length - n; i++) trace.utt[i] = 1;
+    u.faceDown = faceDown;
     queue.push(u); pump();
   }
 }
@@ -152,6 +158,11 @@ async function pump() {
     const sgn = v => (v >= 0 ? "+" : "") + v.toFixed(2), mark = ok => (ok ? "✓" : "✗");
     const cues = `ultrasound sync ${sgn(sync)} ${mark(syncOk)} (needs > ${SYNC})${mode === "loudness" ? " [not used]" : ""}`
       + ` · level ${u.near.toFixed(0)} dB ${mark(loudOk)} (needs ${NEAR})${mode === "ultrasound" ? " [not used]" : ""}`;
+    if (u.faceDown) {
+      addLog(false, "Ignored: phone is face down", "", `${cues} · speech recognition skipped`);
+      setVerdict("#bbb", "Ignored: phone is face down (flip it up to talk to it)");
+      continue;
+    }
     if (!here) {
       const why = mode !== "loudness" && !syncOk ? "voice doesn't match the echo" : "too quiet / far";
       addLog(false, `Ignored: not from someone right here (${why})`, "", `${cues} · speech recognition skipped`);
