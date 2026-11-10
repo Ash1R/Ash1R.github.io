@@ -71,8 +71,8 @@ You need to have the volume up and the silent switch off. Click on how it works 
 <script type="module">
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
 
-const NEAR = 27.5, SYNC = 0.05, F0 = 19000;  // both thresholds set on round 1 of the phone recordings
-const STRONG_SYNC = 0.125, STRONG_NEAR = 25;  // an echo match that shows as +0.13 or more lowers the level needed in both mode
+const NEAR = 27.5, SYNC = 0.125, F0 = 19000;  // sync shows as +0.13 or more
+const BOTH_NEAR = 25;  // with the echo also required, a little less level is enough
 const TONE_MIN = -45, TONE_MAX = -15;  // the echo works from about -41 to -13 dB, it breaks near -5
 let toneGain, gainNow = 0.3, lastStep = 0;  // output gain of the tone, eased down when the mic hears it louder than TONE_MAX
 const tone = new Float32Array(1024);  // tone level per hop, indexed by hop number mod 1024
@@ -171,7 +171,7 @@ async function pump() {
   busy = true;
   while (queue.length) {
     const u = queue.shift(), mode = $("mode").value, sync = (await syncReady)(u);
-    const loudOk = u.near >= (mode === "both" && sync >= STRONG_SYNC ? STRONG_NEAR : NEAR), syncOk = sync > SYNC;
+    const loudOk = u.near >= (mode === "both" ? BOTH_NEAR : NEAR), syncOk = sync >= SYNC;
     const here = mode === "both" ? loudOk && syncOk : mode === "ultrasound" ? syncOk : loudOk;
     const sgn = v => (v >= 0 ? "+" : "") + v.toFixed(2), mark = ok => (ok ? "✓" : "✗");
     const cues = `ultrasound sync ${sgn(sync)} ${mark(syncOk)}${mode === "loudness" ? " unused" : ""}`
@@ -222,7 +222,7 @@ function draw() {
   line(trace.motion, mlo - 1, mhi + 1, "#e07b00");
   line(trace.near, 0, 45, "#1a5fd0");
   c.setLineDash([6, 6]); c.strokeStyle = "#1a5fd0"; c.lineWidth = devicePixelRatio;
-  const yN = H - NEAR / 45 * H; c.beginPath(); c.moveTo(0, yN); c.lineTo(W, yN); c.stroke(); c.setLineDash([]);
+  const yN = H - ($("mode").value === "both" ? BOTH_NEAR : NEAR) / 45 * H; c.beginPath(); c.moveTo(0, yN); c.lineTo(W, yN); c.stroke(); c.setLineDash([]);
   $("carrier").textContent = lastCarrier > TONE_MIN ? "" : "⚠ The 19 kHz tone is too quiet. Turn the volume up, switch off silent mode and uncover the bottom speaker.";
   requestAnimationFrame(draw);
 }
