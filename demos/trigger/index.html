@@ -3,54 +3,57 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ultrasound trigger recorder</title>
+<title>Hotword-free trigger demo</title>
 <style>
-  body { font: 17px/1.45 -apple-system, system-ui, sans-serif; max-width: 34rem; margin: 0 auto; padding: 1.2rem; color: #111; }
-  button { font: inherit; padding: .7rem 1.1rem; margin: .3rem .3rem .3rem 0; border-radius: .6rem; border: 1px solid #888; background: #f4f4f4; }
-  button.go { background: #111; color: #fff; border-color: #111; }
+  body { font: 16px/1.45 -apple-system, system-ui, sans-serif; max-width: 36rem; margin: 0 auto; padding: 1rem 1.1rem 3rem; color: #111; }
+  button { font: inherit; padding: .75rem 1.2rem; border-radius: .6rem; border: 1px solid #111; background: #111; color: #fff; }
   button:disabled { opacity: .4; }
-  .box { border: 1px solid #ddd; border-radius: .7rem; padding: .9rem 1rem; margin: 1rem 0; }
-  .bad { color: #b00020; } .ok { color: #0a7a2f; }
-  #scene { font-size: 1.15rem; } #count { font-size: 2.4rem; font-variant-numeric: tabular-nums; }
-  small { color: #555; }
+  #light { display: flex; align-items: center; gap: .8rem; margin: 1rem 0 .4rem; font-size: 1.15rem; }
+  #dot { width: 2.4rem; height: 2.4rem; border-radius: 50%; background: #ccc; flex: none; transition: background .2s; }
+  canvas { width: 100%; height: 130px; border: 1px solid #ddd; border-radius: .5rem; }
+  .u { border-top: 1px solid #eee; padding: .55rem 0; }
+  .u b.yes { color: #0a7a2f; } .u b.no { color: #888; }
+  .meta { color: #666; font-size: .85rem; }
+  small, .note { color: #555; }
+  details { margin-top: 1.5rem; }
 </style>
 </head>
 <body>
-<h2>Ultrasound trigger recorder</h2>
-<p><small>The phone plays an inaudible 19 kHz tone and records your voice plus the tone's echo off your face. Nothing leaves the phone: you download one WAV file and move it to your laptop. Turn the volume up, the silent switch off, and the case off the bottom speaker.</small></p>
+<h2>Talk to your phone without "Hey Google"</h2>
+<p class="note">It should respond to requests spoken <i>to the phone</i>, and ignore a video playing, people across the room, and noise.
+Try: hold the phone ~40 cm away and ask <i>"what's the capital of Japan?"</i>. Then play a talking video near it, or talk from across the room.
+Volume up, silent switch off. Everything runs on the phone; no audio leaves it.</p>
 
-<button class="go" id="start">Start audio</button>
-<div class="box" id="check" hidden></div>
+<button id="start">Start</button> <span id="load" class="note"></span>
 
-<div id="modes" hidden>
-  <button id="guided">Guided scenes (2 rounds × 7)</button>
-  <button id="free">Free session</button>
-  <label><input id="mins" type="number" value="10" min="1" max="20" style="width:3.5rem"> min</label>
-</div>
+<div id="light"><div id="dot"></div><div id="verdict">Not started</div></div>
+<canvas id="cv"></canvas>
+<div class="meta"><span style="color:#1a5fd0">■</span> voice level above room noise, dashed = "close enough" &nbsp; <span style="color:#e07b00">■</span> 19 kHz echo motion</div>
+<div id="carrier" class="meta"></div>
+<div id="log"></div>
 
-<div class="box" id="run" hidden>
-  <div id="scene"></div>
-  <p id="instr"></p>
-  <div id="count"></div>
-  <button class="go" id="go">Start scene</button>
-  <button id="redo" disabled>Redo last</button>
-  <button id="stop" hidden>Stop &amp; save</button>
-</div>
-<p id="status"></p>
+<details>
+<summary>How it works</summary>
+<p class="note">Every sound goes through a cascade. Each stage only runs if the previous one passed, so the expensive models stay off most of the time:</p>
+<ol class="note">
+  <li><b>Speech?</b> Loudness and pitch periodicity, every 10 ms (hand-written DSP).</li>
+  <li><b>Close to the phone?</b> How far the voice rises above the room's noise floor. The threshold (27.5 dB) was set on round 1 of my phone recordings. On round 2 it rejected all far talk, video and noise (0 of 14), and passed 10 of 10 utterances spoken to the phone.</li>
+  <li><b>What was said?</b> Whisper-tiny (pretrained, in-browser).</li>
+  <li><b>Is it a request?</b> Nearest examples in a pretrained sentence-embedding space (MiniLM). This is the weak stage. It still lets through some chat said close to the phone, and fixing that needs real data.</li>
+</ol>
+<p class="note">The orange trace is the research part. The phone plays an inaudible 19 kHz tone, and lip/jaw motion Doppler-shifts its echo. A self-supervised model I trained on that echo matched audio to the right echo moment 60% of the time when I talked to the phone, against 19% for a video (chance 12%). On my 4 minutes of labeled data it didn't yet beat the loudness cue, so it's shown here but not used in the decision.</p>
+<p class="note"><a href="record.html">Recorder page</a> (labeled scenes for training).</p>
+</details>
 
-<script>
-const F0 = 19000, SECONDS = 30, ROUNDS = 2;
-const SCENES = [  // [name, addressed to assistant?, instruction] — names match record.py
-  ["directed_facing", 1, "Phone on the table in front of you (or in your hand), ~40 cm away, bottom edge toward you. Ask it questions / give it commands. Pause between requests."],
-  ["directed_offaxis", 1, "Same, but rotate the phone so its bottom edge points ~90° away from you (or lay it beside you). The 'pointed the wrong way' case."],
-  ["phone_call_near", 0, "Talk to someone (or on a call on another device) right next to this phone. Do NOT address the phone."],
-  ["far_talk", 0, "Walk ~3 m away and talk (to anyone) from across the room."],
-  ["video", 0, "Sit by the phone silently but naturally; play a talking video / podcast on your laptop ~1.5 m from the phone."],
-  ["noise", 0, "Make everyday noise without talking: type, move things, music, dishes, walk around."],
-  ["silent_working", 0, "Sit with the phone in front of you and work silently on your laptop."],
-];
+<script src="detector.js"></script>
+<script src="intent.js"></script>
+<script type="module">
+import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
+
+const NEAR = 27.5, F0 = 19000;
 const $ = id => document.getElementById(id);
-let ctx, fs, track, chunks = [], captured = 0, capturing = false, ring, head = 0, filled = 0, still = null, segs = [], mode;
+let det, asr, intent, queue = [], busy = false;
+const trace = { near: [], motion: [], utt: [] }, SPAN = 600;
 
 const worklet = `registerProcessor("rec", class extends AudioWorkletProcessor {
   process(inputs) { const x = inputs[0][0]; if (x) this.port.postMessage(x.slice(0)); return true; }
@@ -60,15 +63,13 @@ $("start").onclick = async () => {
   $("start").disabled = true;
   try {
     if (navigator.audioSession) navigator.audioSession.type = "play-and-record";
-    ctx = new AudioContext({ sampleRate: 48000 });  // created inside the tap: iOS only allows audio started by a gesture
+    let ctx = new AudioContext({ sampleRate: 48000 });  // created inside the tap: iOS only allows audio started by a gesture
     const stream = await navigator.mediaDevices.getUserMedia({ audio: {
       echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, sampleRate: 48000 } });
-    track = stream.getAudioTracks()[0];
     let src;
     try { src = ctx.createMediaStreamSource(stream); }
-    catch { ctx.close(); ctx = new AudioContext(); src = ctx.createMediaStreamSource(stream); }  // Firefox: mic rate must match
-    fs = ctx.sampleRate;
-    ring = new Float32Array(Math.round(fs / 2));
+    catch { ctx.close(); ctx = new AudioContext(); src = ctx.createMediaStreamSource(stream); }
+    det = new Detector(ctx.sampleRate);
     await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([worklet], { type: "application/javascript" })));
     const rec = new AudioWorkletNode(ctx, "rec"), sink = ctx.createGain();
     sink.gain.value = 0;
@@ -79,137 +80,97 @@ $("start").onclick = async () => {
     osc.connect(g).connect(ctx.destination); osc.start();
     await ctx.resume();
     navigator.wakeLock?.request("screen").catch(() => {});
-    setInterval(selfCheck, 700);
-    $("check").hidden = $("modes").hidden = false;
+    setVerdict("#ccc", "Listening…");
+    requestAnimationFrame(draw);
+    loadModels();
   } catch (err) {
-    $("status").innerHTML = `<span class="bad">Could not start audio: ${err.message}</span>`;
+    setVerdict("#c00", `Could not start audio: ${err.message}`);
     $("start").disabled = false;
   }
 };
 
+async function loadModels() {
+  const files = {};
+  const progress_callback = p => {
+    if (p.status === "progress") files[p.file] = [p.loaded, p.total];
+    const [a, b] = Object.values(files).reduce(([a, b], [x, y]) => [a + x, b + y], [0, 0]);
+    if (b) $("load").textContent = `loading models ${Math.round(b / 1e6)} MB: ${Math.round(100 * a / b)}%`;
+  };
+  asr = await pipeline("automatic-speech-recognition", "onnx-community/whisper-tiny.en", { dtype: "q8", progress_callback });
+  intent = await makeIntent((task, model, opts) => pipeline(task, model, { ...opts, progress_callback }));
+  $("load").textContent = "models ready";
+  pump();
+}
+
+let lastCarrier = -200;
 function onAudio(x) {
-  for (let i = 0; i < x.length; i++) ring[(head + i) % ring.length] = x[i];
-  head = (head + x.length) % ring.length; filled = Math.min(ring.length, filled + x.length);
-  if (!capturing) return;
-  const q = new Int16Array(x.length);
-  for (let i = 0; i < x.length; i++) q[i] = Math.max(-32768, Math.min(32767, Math.round(x[i] * 32767)));
-  chunks.push(q);
-  captured += x.length;
-}
-
-function power(x, f) {  // Hann-windowed Goertzel
-  const w = 2 * Math.cos(2 * Math.PI * f / fs);
-  let s1 = 0, s2 = 0;
-  for (let i = 0; i < x.length; i++) {
-    const s = x[i] * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / x.length)) + w * s1 - s2;
-    s2 = s1; s1 = s;
+  const { hops, utterances } = det.push(x);
+  for (const h of hops) {
+    trace.near.push(h.lvl - h.floor); trace.motion.push(h.motion); trace.utt.push(0);
+    lastCarrier = h.carrier;
   }
-  return s1 * s1 + s2 * s2 - w * s1 * s2;
-}
-
-function selfCheck() {
-  if (filled < ring.length) return;
-  const recent = new Float32Array(ring.length);
-  recent.set(ring.subarray(head)); recent.set(ring.subarray(0, head), ring.length - head);
-  const c = power(recent, F0), n = [-400, -250, 250, 400].reduce((a, d) => a + power(recent, F0 + d), 0) / 4;
-  const snr = 10 * Math.log10(c / (n + 1e-20)), lvl = 10 * Math.log10(c / (recent.length ** 2 / 16) + 1e-20);
-  const s = track.getSettings(), proc = ["echoCancellation", "noiseSuppression", "autoGainControl"].filter(k => s[k]);
-  const ok = snr > 25 && fs >= 44100 && !proc.length;
-  let side = 0, nb = 0;  // Doppler sidebands 15-80 Hz either side of the carrier = motion in front of the phone
-  for (let d = 15; d <= 80; d += 5) { side += power(recent, F0 + d) + power(recent, F0 - d); nb += 2; }
-  const motion = 10 * Math.log10(Math.max(side - nb * n, 1e-3 * nb * n) / c);  // minus broadband (typing, clicks) floor
-  let meter = "— (no 19 kHz carrier)";
-  if (snr > 25) {
-    still = still === null ? motion : Math.min(still + 0.3, motion);  // slowly-rising floor = "nothing moving"
-    const bar = Math.max(0, Math.min(30, Math.round(motion - still)));
-    meter = `<span style="font-family:monospace">${"█".repeat(bar)}${"·".repeat(30 - bar)}</span> +${(motion - still).toFixed(0)} dB`;
+  for (const k in trace) if (trace[k].length > SPAN) trace[k].splice(0, trace[k].length - SPAN);
+  for (const u of utterances) {
+    const back = det.t - u.start, n = det.t - u.end;
+    for (let i = Math.max(0, trace.utt.length - back); i < trace.utt.length - n; i++) trace.utt[i] = 1;
+    queue.push(u); pump();
   }
-  $("check").innerHTML = `<b class="${ok ? "ok" : "bad"}">${ok ? "Ultrasound OK" : "Ultrasound problem"}</b><br>
-    19 kHz echo ${snr.toFixed(0)} dB above nearby noise (want &gt; 25), level ${lvl.toFixed(0)} dBFS, ${fs} Hz<br>
-    motion ${meter}
-    <br><small>Hold still, then wave a hand 10–20 cm above the bottom edge: the bar should jump 10+ dB. Covering the bottom edge should drop the level.</small>` +
-    (proc.length ? `<br><span class="bad">Browser is still applying: ${proc.join(", ")}</span>` : "") +
-    (snr <= 25 ? `<br><small>Raise the volume, uncover the bottom speaker/mic; if it stays low this phone/browser filters ultrasound.</small>` : "");
 }
 
-const beep = () => {
-  const o = ctx.createOscillator(), g = ctx.createGain();
-  o.frequency.value = 880; g.gain.value = 0.15;
-  o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.15);
-};
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-function resetCapture(m) {
-  mode = m; chunks = []; captured = 0; segs = [];
-  $("modes").hidden = true; $("run").hidden = false;
+function to16k(u) {
+  if (Math.abs(u.fs - 16000) < 1) return u.audio;
+  const n = Math.round(u.audio.length * 16000 / u.fs), y = new Float32Array(n), r = u.fs / 16000;
+  for (let i = 0; i < n; i++) { const p = i * r, j = Math.floor(p), f = p - j; y[i] = u.audio[j] * (1 - f) + (u.audio[j + 1] ?? 0) * f; }
+  return y;
 }
 
-let idx = 0;  // position in the guided schedule
-const schedule = [...Array(ROUNDS)].flatMap((_, k) => SCENES.map(s => [k + 1, ...s]));
-function showScene() {
-  const [round, name, , instr] = schedule[idx];
-  $("scene").innerHTML = `<b>${idx + 1}/${schedule.length}</b> · round ${round} · <b>${name}</b>`;
-  $("instr").textContent = instr;
-  $("count").textContent = "";
+async function pump() {
+  if (busy) return;
+  busy = true;
+  while (queue.length) {
+    const u = queue.shift(), echo = `echo agreement ${u.echo >= 0 ? "+" : ""}${u.echo.toFixed(2)} (experimental, unused)`;
+    if (u.near < NEAR) {
+      addLog(false, "Ignored: not close to the phone", "", `level ${u.near.toFixed(0)} dB (needs ${NEAR}) · speech recognition skipped · ${echo}`);
+      setVerdict("#bbb", "Ignored: speech, but not close to the phone");
+      continue;
+    }
+    if (!asr || !intent) { addLog(false, "Close speech (models still loading)", "", `level ${u.near.toFixed(0)} dB · ${echo}`); continue; }
+    setVerdict("#f2c200", "Close speech… transcribing");
+    const t0 = performance.now(), text = (await asr(to16k(u))).text.trim(), { score } = await intent(text);
+    const ms = Math.round(performance.now() - t0), yes = score > 0;
+    addLog(yes, yes ? "Would respond" : "Ignored: not a request", text,
+      `level ${u.near.toFixed(0)} dB · request score ${score >= 0 ? "+" : ""}${score.toFixed(2)} · ${ms} ms · ${echo}`);
+    setVerdict(yes ? "#0a7a2f" : "#bbb", yes ? `Would respond: “${text}”` : `Ignored: “${text}” isn't a request`);
+  }
+  busy = false;
 }
 
-$("guided").onclick = () => { resetCapture("guided"); idx = 0; showScene(); };
+function setVerdict(color, text) { $("dot").style.background = color; $("verdict").textContent = text; }
 
-$("go").onclick = async () => {
-  if (mode === "free") return runFree();
-  const [round, name, directed] = schedule[idx];
-  $("go").disabled = $("redo").disabled = true;
-  for (let t = 2; t > 0; t--) { $("count").textContent = `starting in ${t}…`; await sleep(1000); }
-  const start = captured;
-  capturing = true;
-  for (let t = SECONDS; t > 0; t--) { $("count").textContent = `${t} s`; await sleep(1000); }
-  capturing = false;
-  segs.push({ name, round, directed, start, end: captured });
-  beep();
-  idx++;
-  $("go").disabled = false; $("redo").disabled = false;
-  if (idx < schedule.length) showScene();
-  else { save(); $("go").disabled = $("redo").disabled = true; $("count").textContent = "done ✓"; }
-};
-
-$("redo").onclick = () => {
-  const s = segs.pop();
-  let drop = s.end - s.start;
-  while (drop > 0) { const c = chunks.pop(); drop -= c.length; }  // segment boundaries fall on chunk boundaries
-  captured = s.start; idx--; showScene();
-  $("redo").disabled = !segs.length;
-};
-
-$("free").onclick = () => {
-  resetCapture("free");
-  $("scene").innerHTML = "<b>Free session</b> (unlabeled)";
-  $("instr").textContent = "Keep the phone near you and live normally: talk to it, to people, on calls; play videos; make noise. Variety helps.";
-  $("redo").hidden = true;
-};
-
-async function runFree() {
-  const secs = 60 * +$("mins").value;
-  $("go").hidden = true; $("stop").hidden = false;
-  capturing = true;
-  for (let t = secs; t > 0 && capturing; t--) { $("count").textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; await sleep(1000); }
-  if (capturing) finishFree();
+function addLog(yes, title, text, meta) {
+  const d = document.createElement("div");
+  d.className = "u";
+  d.innerHTML = `<b class="${yes ? "yes" : "no"}">${yes ? "✓" : "✗"} ${title}</b>${text ? ` — “${text.replace(/</g, "&lt;")}”` : ""}<div class="meta">${meta}</div>`;
+  $("log").prepend(d);
 }
-const finishFree = () => { capturing = false; $("stop").hidden = true; $("count").textContent = "done ✓"; save(); };
-$("stop").onclick = finishFree;
 
-function save() {  // 16-bit mono WAV with the scene timeline in a custom "lbls" chunk
-  const meta = new TextEncoder().encode(JSON.stringify({ mode, fs, f0: F0, ua: navigator.userAgent, segs }));
-  const ml = meta.length + (meta.length & 1), dl = captured * 2;
-  const h = new DataView(new ArrayBuffer(44 + 8 + ml)), str = (o, s) => [...s].forEach((c, i) => h.setUint8(o + i, c.charCodeAt(0)));
-  str(0, "RIFF"); h.setUint32(4, 4 + 24 + 8 + ml + 8 + dl, true); str(8, "WAVE");
-  str(12, "fmt "); h.setUint32(16, 16, true); h.setUint16(20, 1, true); h.setUint16(22, 1, true);
-  h.setUint32(24, fs, true); h.setUint32(28, fs * 2, true); h.setUint16(32, 2, true); h.setUint16(34, 16, true);
-  str(36, "lbls"); h.setUint32(40, meta.length, true); new Uint8Array(h.buffer, 44, meta.length).set(meta);
-  str(44 + ml, "data"); h.setUint32(48 + ml, dl, true);
-  const url = URL.createObjectURL(new Blob([h.buffer, ...chunks], { type: "audio/wav" }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: `trigger_${mode}_${Date.now()}.wav` });
-  document.body.append(a); a.click();
-  $("status").innerHTML = `Saved ${(captured / fs / 60).toFixed(1)} min. If nothing downloaded, <a href="${url}" download="${a.download}">tap here</a>. Then AirDrop / send it to your laptop.`;
+function draw() {
+  const cv = $("cv"), W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, c = cv.getContext("2d");
+  const n = trace.near.length, x = i => W - (n - i) * W / SPAN;
+  c.fillStyle = "rgba(10,122,47,.10)";
+  trace.utt.forEach((v, i) => v && c.fillRect(x(i), 0, W / SPAN + 1, H));
+  const line = (arr, lo, hi, color) => {
+    c.beginPath(); c.strokeStyle = color; c.lineWidth = 1.5 * devicePixelRatio;
+    arr.forEach((v, i) => { const y = H - (Math.min(Math.max(v, lo), hi) - lo) / (hi - lo) * H; i ? c.lineTo(x(i), y) : c.moveTo(x(i), y); });
+    c.stroke();
+  };
+  const mlo = Math.min(...trace.motion.slice(-SPAN)), mhi = Math.max(...trace.motion.slice(-SPAN));
+  line(trace.motion, mlo - 1, mhi + 1, "#e07b00");
+  line(trace.near, 0, 45, "#1a5fd0");
+  c.setLineDash([6, 6]); c.strokeStyle = "#1a5fd0"; c.lineWidth = devicePixelRatio;
+  const yN = H - NEAR / 45 * H; c.beginPath(); c.moveTo(0, yN); c.lineTo(W, yN); c.stroke(); c.setLineDash([]);
+  $("carrier").textContent = lastCarrier > -45 ? "" : "⚠ no 19 kHz echo detected: volume up, silent switch off, bottom speaker uncovered";
+  requestAnimationFrame(draw);
 }
 </script>
 </body>
