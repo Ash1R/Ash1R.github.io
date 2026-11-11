@@ -69,9 +69,9 @@ You need to have the volume up and the silent switch off. Click on how it works 
 <p class="note"><a href="record.html">Recorder page</a> for collecting labeled scenes.</p>
 </details>
 
-<script src="detector.js?v=3"></script>
-<script src="intent.js?v=3"></script>
-<script src="sync.js?v=3"></script>
+<script src="detector.js?v=4"></script>
+<script src="intent.js?v=4"></script>
+<script src="sync.js?v=4"></script>
 <script type="module">
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
 
@@ -80,7 +80,7 @@ const F0 = 19000;
 // LOUD is the voice level in dB re full scale, SYNC = 0.085 shows as +0.09 or more
 const DEVICES = {
   iphone: { weights: "sync_weights.json", SYNC: 0.085, LOUD: -58 },
-  pixel: { weights: "sync_weights_pixel.json", SYNC: 0.085, LOUD: -58 },  // from calibrate.js on the Pixel recordings
+  pixel: { weights: "sync_weights_pixel.json", SYNC: -0.05, LOUD: -39 },  // calibrate.js on the Pixel recordings: the echo barely separates, loudness does
 };
 const ABOVE_NOISE = 15;  // and the voice still has to stand out from the room
 const TONE_MIN = -45, TONE_MAX = -15;  // the echo works from about -41 to -13 dB, it breaks near -5
@@ -88,7 +88,7 @@ let toneGain, gainNow = 0.3, lastStep = 0;  // output gain of the tone, eased do
 const tone = new Float32Array(1024);  // tone level per hop, indexed by hop number mod 1024
 const $ = id => document.getElementById(id);
 let det, asr, intent, queue = [], busy = false, faceDown = false;  // face down = "leave me alone", as in Pixel's Flip to Shhh
-const loadWeights = name => fetch(DEVICES[name].weights + "?v=3").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+const loadWeights = name => fetch(DEVICES[name].weights + "?v=4").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
 const models = {};  // phone -> { name of the model actually used, sync function }, a phone without its own model uses the iPhone one
 const model = phone => models[phone] ??= loadWeights(phone).then(w => ({ name: phone, sync: makeSync(w) }))
   .catch(() => phone === "iphone" ? Promise.reject(new Error("no sync model")) : model("iphone"));
@@ -97,7 +97,8 @@ let shown = "iphone";  // the model the graph's threshold line belongs to
 const showPhone = async () => {
   const m = await model($("phone").value);
   shown = m.name;
-  $("phoneNote").textContent = m.name === $("phone").value ? "" : "no Pixel model yet, using the iPhone one";
+  $("phoneNote").textContent = m.name !== $("phone").value ? "no Pixel model yet, using the iPhone one"
+    : m.name === "pixel" ? "On Pixel the echo barely helps since Android keeps its echo cancellation on, so loudness does the work" : "";
 };
 $("phone").onchange = showPhone; showPhone();
 const trace = { near: [], motion: [], utt: [] }, SPAN = 600;
