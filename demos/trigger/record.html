@@ -56,13 +56,18 @@ const worklet = `registerProcessor("rec", class extends AudioWorkletProcessor {
   process(inputs) { const x = inputs[0][0]; if (x) this.port.postMessage(x.slice(0)); return true; }
 });`;
 
+// insist on raw audio first (Chrome on Android ignores plain false), and fall back to asking if the browser refuses
+const RAW = { channelCount: 1, sampleRate: 48000, voiceIsolation: false };
+const rawMic = () => navigator.mediaDevices.getUserMedia({ audio: { ...RAW,
+    echoCancellation: { exact: false }, noiseSuppression: { exact: false }, autoGainControl: { exact: false } } })
+  .catch(() => navigator.mediaDevices.getUserMedia({ audio: { ...RAW, echoCancellation: false, noiseSuppression: false, autoGainControl: false } }));
+
 $("start").onclick = async () => {
   $("start").disabled = true;
   try {
     if (navigator.audioSession) navigator.audioSession.type = "play-and-record";
     ctx = new AudioContext({ sampleRate: 48000 });  // created inside the tap: iOS only allows audio started by a gesture
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: {
-      echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, sampleRate: 48000 } });
+    const stream = await rawMic();
     track = stream.getAudioTracks()[0];
     let src;
     try { src = ctx.createMediaStreamSource(stream); }
