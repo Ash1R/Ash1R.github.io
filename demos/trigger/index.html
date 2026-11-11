@@ -69,26 +69,28 @@ You need to have the volume up and the silent switch off. Click on how it works 
 <p class="note"><a href="record.html">Recorder page</a> for collecting labeled scenes.</p>
 </details>
 
-<script src="detector.js?v=4"></script>
-<script src="intent.js?v=4"></script>
-<script src="sync.js?v=4"></script>
+<script src="detector.js?v=5"></script>
+<script src="intent.js?v=5"></script>
+<script src="sync.js?v=5"></script>
 <script type="module">
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
 
 const F0 = 19000;
 // each phone gets its own sync model and thresholds: speaker, mic and Android's forced audio processing all change the echo
-// LOUD is the voice level in dB re full scale, SYNC = 0.085 shows as +0.09 or more
+// LOUD is the voice level in dB re full scale, SYNC is per mode (0.085 shows as +0.09), toneMax caps the tone level
+// pixel, from calibrate.js on the Pixel recordings: Android's processing pumps the tone's gain, so the echo uses phase only,
+// and in both mode loudness alone did best, so the echo is left out there; the tone plays at the level it was recorded at
 const DEVICES = {
-  iphone: { weights: "sync_weights.json", SYNC: 0.085, LOUD: -58 },
-  pixel: { weights: "sync_weights_pixel.json", SYNC: -0.05, LOUD: -39 },  // calibrate.js on the Pixel recordings: the echo barely separates, loudness does
+  iphone: { weights: "sync_weights.json", phaseOnly: false, SYNC: { both: 0.085, ultrasound: 0.085 }, LOUD: -58, toneMax: -15 },
+  pixel: { weights: "sync_weights_pixel.json", phaseOnly: true, SYNC: { both: -Infinity, ultrasound: 0.02 }, LOUD: -39, toneMax: Infinity },
 };
 const ABOVE_NOISE = 15;  // and the voice still has to stand out from the room
-const TONE_MIN = -45, TONE_MAX = -15;  // the echo works from about -41 to -13 dB, it breaks near -5
-let toneGain, gainNow = 0.3, lastStep = 0;  // output gain of the tone, eased down when the mic hears it louder than TONE_MAX
+const TONE_MIN = -45;  // on the iPhone the echo works from about -41 to -13 dB and breaks near -5
+let toneGain, gainNow = 0.3, lastStep = 0;  // output gain of the tone, eased down when the mic hears it louder than toneMax
 const tone = new Float32Array(1024);  // tone level per hop, indexed by hop number mod 1024
 const $ = id => document.getElementById(id);
 let det, asr, intent, queue = [], busy = false, faceDown = false;  // face down = "leave me alone", as in Pixel's Flip to Shhh
-const loadWeights = name => fetch(DEVICES[name].weights + "?v=4").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+const loadWeights = name => fetch(DEVICES[name].weights + "?v=5").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
 const models = {};  // phone -> { name of the model actually used, sync function }, a phone without its own model uses the iPhone one
 const model = phone => models[phone] ??= loadWeights(phone).then(w => ({ name: phone, sync: makeSync(w) }))
   .catch(() => phone === "iphone" ? Promise.reject(new Error("no sync model")) : model("iphone"));
@@ -97,8 +99,9 @@ let shown = "iphone";  // the model the graph's threshold line belongs to
 const showPhone = async () => {
   const m = await model($("phone").value);
   shown = m.name;
+  if (det) det.phaseOnly = DEVICES[shown].phaseOnly;
   $("phoneNote").textContent = m.name !== $("phone").value ? "no Pixel model yet, using the iPhone one"
-    : m.name === "pixel" ? "On Pixel the echo barely helps since Android keeps its echo cancellation on, so loudness does the work" : "";
+    : m.name === "pixel" ? "On Pixel, Android's audio processing weakens the echo, so loudness decides unless you pick ultrasound only" : "";
 };
 $("phone").onchange = showPhone; showPhone();
 const trace = { near: [], motion: [], utt: [] }, SPAN = 600;
@@ -121,7 +124,7 @@ $("start").onclick = async () => {
     let src;
     try { src = ctx.createMediaStreamSource(stream); }
     catch { ctx.close(); ctx = new AudioContext(); src = ctx.createMediaStreamSource(stream); }
-    det = new Detector(ctx.sampleRate);
+    det = new Detector(ctx.sampleRate, F0, { phaseOnly: DEVICES[shown].phaseOnly });
     await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([worklet], { type: "application/javascript" })));
     const rec = new AudioWorkletNode(ctx, "rec"), sink = ctx.createGain();
     sink.gain.value = 0;
@@ -167,7 +170,7 @@ function onAudio(x) {
   // one small step every 0.5 s on a smooth ramp, so the gain change doesn't leak into the Doppler bins
   if (toneGain && hops.length && det.t - lastStep >= 50) {
     lastStep = det.t;
-    const db = lastCarrier > TONE_MAX + 2 ? -1 : lastCarrier < TONE_MAX - 4 ? 0.5 : 0;
+    const max = DEVICES[shown].toneMax, db = lastCarrier > max + 2 ? -1 : lastCarrier < max - 4 ? 0.5 : 0;
     if (db) { gainNow = Math.min(0.3, Math.max(0.003, gainNow * 10 ** (db / 20))); toneGain.setTargetAtTime(gainNow, 0, 0.15); }
   }
   for (const k in trace) if (trace[k].length > SPAN) trace[k].splice(0, trace[k].length - SPAN);
@@ -193,10 +196,11 @@ async function pump() {
   busy = true;
   while (queue.length) {
     const u = queue.shift(), mode = $("mode").value, m = await model($("phone").value), sync = m.sync(u);
-    const { LOUD, SYNC } = DEVICES[m.name], loudOk = u.voice >= LOUD && u.near >= ABOVE_NOISE, syncOk = sync >= SYNC;
+    const { LOUD } = DEVICES[m.name], SYNC = DEVICES[m.name].SYNC[mode] ?? -Infinity;
+    const loudOk = u.voice >= LOUD && u.near >= ABOVE_NOISE, syncOk = sync >= SYNC, echoUsed = mode !== "loudness" && SYNC > -Infinity;
     const here = mode === "both" ? loudOk && syncOk : mode === "ultrasound" ? syncOk : loudOk;
     const sgn = v => (v >= 0 ? "+" : "") + v.toFixed(2), mark = ok => (ok ? "✓" : "✗");
-    const cues = `ultrasound sync ${sgn(sync)} ${mark(syncOk)}${mode === "loudness" ? " unused" : ""}`
+    const cues = `ultrasound sync ${sgn(sync)} ${mark(syncOk)}${echoUsed ? "" : " unused"}`
       + ` · level ${u.voice.toFixed(0)} dB ${mark(loudOk)}${mode === "ultrasound" ? " unused" : ""}`
       + ` · tone ${u.tone.toFixed(0)} dB`;
     if (u.faceDown) {

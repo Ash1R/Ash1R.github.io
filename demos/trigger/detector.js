@@ -59,8 +59,9 @@ function melBank(m, nfft, fs, lo, hi) {  // HTK-style triangles over the nfft/2+
 const LAGS = [40, 70], KEEP = 3000, AUDIO_S = 12, NMEL = 24, PAD = 100;
 
 class Detector {
-  constructor(fs, f0 = 19000) {
+  constructor(fs, f0 = 19000, { phaseOnly = false } = {}) {
     this.fs = fs;
+    this.phaseOnly = phaseOnly;  // drop the tone's amplitude before the Doppler DFT, so processing that pumps its gain (Android) can't fake motion
     const P = fs / gcd(fs, f0);  // demodulation table repeats exactly (48 samples at 48 kHz)
     this.cos = Float64Array.from({ length: P }, (_, n) => Math.cos(2 * Math.PI * f0 * n / fs));
     this.sin = Float64Array.from({ length: P }, (_, n) => -Math.sin(2 * Math.PI * f0 * n / fs));
@@ -110,14 +111,20 @@ class Detector {
   hop() {
     const lvl = 10 * Math.log10(this.en / this.enN + 1e-12);
     this.en = this.enN = 0;
-    const pw = this.tw.map(t => {
+    let RE = this.re, IM = this.im;
+    if (this.phaseOnly) {
+      RE = new Float64Array(this.N); IM = new Float64Array(this.N);
+      for (let n = 0; n < this.N; n++) { const a = Math.hypot(this.re[n], this.im[n]) + 1e-12; RE[n] = this.re[n] / a; IM[n] = this.im[n] / a; }
+    }
+    const bin = (t, RE, IM) => {
       let r = 0, m = 0;
       for (let n = 0; n < this.N; n++) {
         const j = (this.bp + n) % this.N, [c, s] = t[n];
-        r += this.re[j] * c - this.im[j] * s; m += this.re[j] * s + this.im[j] * c;
+        r += RE[j] * c - IM[j] * s; m += RE[j] * s + IM[j] * c;
       }
       return r * r + m * m;
-    });
+    };
+    const pw = this.tw.map(t => bin(t, RE, IM)), tone = this.phaseOnly ? bin(this.tw[0], this.re, this.im) : pw[0];
     const carrier = pw[0], motion = 10 * Math.log10(pw.slice(1).reduce((a, b) => a + b, 0) / (carrier + 1e-20) + 1e-12);
 
     const L = this.a8.length, s = Float64Array.from({ length: L }, (_, n) => this.a8[(this.ap + n) % L]);
@@ -138,7 +145,7 @@ class Detector {
     for (const [k, v] of [["lvl", lvl], ["motion", motion], ["voiced", voiced], ["floor", this.floor], ["mel", mel], ["dop", dop]]) this.h[k].push(v);
     if (this.h.lvl.length > KEEP) { for (const k in this.h) this.h[k].splice(0, 1000); this.t0 += 1000; }
     this.t++;
-    return { t: this.t - 1, lvl, motion, voiced, floor: this.floor, carrier: 10 * Math.log10(carrier + 1e-20) };
+    return { t: this.t - 1, lvl, motion, voiced, floor: this.floor, carrier: 10 * Math.log10(tone + 1e-20) };
   }
 
   at(k, t) { return this.h[k][t - this.t0]; }
