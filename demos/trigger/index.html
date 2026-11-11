@@ -79,10 +79,10 @@ const F0 = 19000;
 // each phone gets its own sync model and thresholds: speaker, mic and Android's forced audio processing all change the echo
 // LOUD is the voice level in dB re full scale, SYNC is per mode (0.085 shows as +0.09), toneMax caps the tone level
 // pixel, from calibrate.js on the Pixel recordings: Android's processing pumps the tone's gain, so the echo uses phase only,
-// and in both mode loudness alone did best, so the echo is left out there; the tone plays at the level it was recorded at
+// and its weak echo gets a low threshold in both mode; the tone plays at the level it was recorded at
 const DEVICES = {
   iphone: { weights: "sync_weights.json", phaseOnly: false, SYNC: { both: 0.085, ultrasound: 0.085 }, LOUD: -58, toneMax: -15 },
-  pixel: { weights: "sync_weights_pixel.json", phaseOnly: true, SYNC: { both: -Infinity, ultrasound: 0.02 }, LOUD: -39, toneMax: Infinity },
+  pixel: { weights: "sync_weights_pixel.json", phaseOnly: true, SYNC: { both: -0.07, ultrasound: 0.02 }, LOUD: -39, toneMax: Infinity },
 };
 const ABOVE_NOISE = 15;  // and the voice still has to stand out from the room
 const TONE_MIN = -45;  // on the iPhone the echo works from about -41 to -13 dB and breaks near -5
@@ -101,7 +101,7 @@ const showPhone = async () => {
   shown = m.name;
   if (det) det.phaseOnly = DEVICES[shown].phaseOnly;
   $("phoneNote").textContent = m.name !== $("phone").value ? "no Pixel model yet, using the iPhone one"
-    : m.name === "pixel" ? "On Pixel, Android's audio processing weakens the echo, so loudness decides unless you pick ultrasound only" : "";
+    : m.name === "pixel" ? "On Pixel, Android's audio processing weakens the echo, so it gets a lower bar" : "";
 };
 $("phone").onchange = showPhone; showPhone();
 const trace = { near: [], motion: [], utt: [] }, SPAN = 600;
