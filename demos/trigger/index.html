@@ -71,14 +71,23 @@ You need to have the volume up and the silent switch off. Click on how it works 
 <script type="module">
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
 
-const LOUD = -58, SYNC = 0.085, F0 = 19000;  // voice level in dB re full scale, sync shows as +0.09 or more
+const F0 = 19000;
+// each phone gets its own sync model and thresholds: speaker, mic and Android's forced audio processing all change the echo
+// LOUD is the voice level in dB re full scale, SYNC = 0.085 shows as +0.09 or more
+const DEVICES = {
+  iphone: { weights: "sync_weights.json", SYNC: 0.085, LOUD: -58 },
+  pixel: { weights: "sync_weights_pixel.json", SYNC: 0.085, LOUD: -58 },  // from calibrate.js on the Pixel recordings
+};
+const asked = new URLSearchParams(location.search).get("device") ?? (/Android/.test(navigator.userAgent) ? "pixel" : "iphone");
+let device = DEVICES[asked] ? asked : "iphone";
 const ABOVE_NOISE = 15;  // and the voice still has to stand out from the room
 const TONE_MIN = -45, TONE_MAX = -15;  // the echo works from about -41 to -13 dB, it breaks near -5
 let toneGain, gainNow = 0.3, lastStep = 0;  // output gain of the tone, eased down when the mic hears it louder than TONE_MAX
 const tone = new Float32Array(1024);  // tone level per hop, indexed by hop number mod 1024
 const $ = id => document.getElementById(id);
 let det, asr, intent, queue = [], busy = false, faceDown = false;  // face down = "leave me alone", as in Pixel's Flip to Shhh
-const syncReady = fetch("sync_weights.json?v=3").then(r => r.json()).then(makeSync);
+const loadWeights = name => fetch(DEVICES[name].weights + "?v=3").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+const syncReady = loadWeights(device).catch(() => loadWeights(device = "iphone")).then(makeSync);
 const trace = { near: [], motion: [], utt: [] }, SPAN = 600;
 
 const worklet = `registerProcessor("rec", class extends AudioWorkletProcessor {
@@ -113,7 +122,8 @@ $("start").onclick = async () => {
     ctx.onstatechange = () => ctx.state !== "running" && setVerdict("#c00", "Audio was paused by another app. Tap anywhere to resume");
     addEventListener("click", () => ctx.state !== "running" && ctx.resume().then(() => setVerdict("#ccc", "Listening…")));
     navigator.wakeLock?.request("screen").catch(() => {});
-    setVerdict("#ccc", "Listening…");
+    await syncReady;  // settles which device's model loaded
+    setVerdict("#ccc", `Listening with the ${device} model…`);
     requestAnimationFrame(draw);
     loadModels();
   } catch (err) {
@@ -171,7 +181,7 @@ async function pump() {
   busy = true;
   while (queue.length) {
     const u = queue.shift(), mode = $("mode").value, sync = (await syncReady)(u);
-    const loudOk = u.voice >= LOUD && u.near >= ABOVE_NOISE, syncOk = sync >= SYNC;
+    const { LOUD, SYNC } = DEVICES[device], loudOk = u.voice >= LOUD && u.near >= ABOVE_NOISE, syncOk = sync >= SYNC;
     const here = mode === "both" ? loudOk && syncOk : mode === "ultrasound" ? syncOk : loudOk;
     const sgn = v => (v >= 0 ? "+" : "") + v.toFixed(2), mark = ok => (ok ? "✓" : "✗");
     const cues = `ultrasound sync ${sgn(sync)} ${mark(syncOk)}${mode === "loudness" ? " unused" : ""}`
@@ -224,7 +234,7 @@ function draw() {
   line(trace.motion, mlo - 1, mhi + 1, "#e07b00");
   line(trace.near, -80, -35, "#1a5fd0");
   c.setLineDash([6, 6]); c.strokeStyle = "#1a5fd0"; c.lineWidth = devicePixelRatio;
-  const yN = H - (LOUD + 80) / 45 * H; c.beginPath(); c.moveTo(0, yN); c.lineTo(W, yN); c.stroke(); c.setLineDash([]);
+  const yN = H - (DEVICES[device].LOUD + 80) / 45 * H; c.beginPath(); c.moveTo(0, yN); c.lineTo(W, yN); c.stroke(); c.setLineDash([]);
   $("carrier").textContent = lastCarrier > TONE_MIN ? "" : "⚠ The 19 kHz tone is too quiet. Turn the volume up, switch off silent mode and uncover the bottom speaker.";
   requestAnimationFrame(draw);
 }
